@@ -50,6 +50,8 @@ $ pnpm test:watch
 
 ## Code organisation
 
+(Outdated)
+
 The eslint configuration defines strict dependency rules that can be used to enforce a clean architecture. By default:
 
 1. `domain/entities` cannot import from any other module.

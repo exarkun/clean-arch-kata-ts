@@ -1,6 +1,6 @@
 import { Argv } from "yargs";
-import { StrictCommandType } from "./types";
-import { getGreeting } from "usecases/greet";
+import { StrictCommandType } from "../lib/cli";
+import { getGreeting } from "./domain";
 
 const builder = (yargs: Argv) =>
   yargs

@@ -19,6 +19,7 @@
           buildInputs = with pkgs; [
             alejandra
             nil
+            typescript
             nodePackages.typescript-language-server
             nodejs_20
             nodePackages.pnpm

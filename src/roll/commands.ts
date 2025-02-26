@@ -1,7 +1,7 @@
-import { Argv } from "yargs";
-import { StrictCommandType } from "./types";
-import { rollDice } from "usecases/roll";
 import seedrandom from "seedrandom";
+import { Argv } from "yargs";
+import { StrictCommandType } from "../lib/cli";
+import { rollDice } from "./domain";
 
 const builder = (yargs: Argv) =>
   yargs.options({

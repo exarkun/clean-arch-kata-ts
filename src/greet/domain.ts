@@ -1,4 +1,6 @@
-import { Subject } from "entities/subject";
+export type Subject = {
+  name: string;
+};
 
 const defaultGreeting = "Hello, :subject!";
 

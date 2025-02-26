@@ -1,8 +1,8 @@
-import { hideBin } from "yargs/helpers";
-import { greetCommand } from "./commands/greet";
-import { rollCommand } from "./commands/roll";
 import yargs from "yargs";
-import { db } from "data/db";
+import { hideBin } from "yargs/helpers";
+import { db } from "../data/db";
+import { greetCommand } from "../greet/commands";
+import { rollCommand } from "../roll/commands";
 
 const program = yargs(hideBin(process.argv))
   .command(greetCommand)

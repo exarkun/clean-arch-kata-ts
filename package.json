@@ -9,7 +9,7 @@
     "build": "tsc --noEmit",
     "lint": "eslint . && prettier --check .",
     "format": "prettier . --write",
-    "cli": "ts-node src/app/main",
+    "cli": "ts-node src/cli/main",
     "prepare": "husky",
     "db:migrate:make": "knex migrate:make",
     "db:migrate": "knex migrate:latest",

@@ -1,6 +1,6 @@
 import { describe, expect, it, jest } from "@jest/globals";
-import { rollDice } from "./roll";
 import { IO } from "fp-ts/lib/IO";
+import { rollDice } from "./domain";
 
 describe("rollDice", () => {
   const stubRandom = (values: number[]): jest.Mock<IO<number>> => {

@@ -50,7 +50,7 @@ export const birth =
 /**
  * Define a Board with only dead cells.
  */
-export const emptyBoard: Board = (_) => CellState.Dead;
+export const emptyBoard: Board = () => CellState.Dead;
 
 /**
  * Denote each possible direction in which a cell can have a neighbor.
@@ -167,3 +167,26 @@ export const advanceWithStorage =
   (rule: StateChangeRule) =>
   (board: Board): Board =>
     newStoreBoard(width, height, recursiveAdvance(rule)(board));
+
+/**
+ * Define the living cells that make up a few well-known patterns.
+ */
+export const patterns = {
+  glider: [
+    { x: 0, y: 1 },
+    { x: 1, y: 2 },
+    { x: 2, y: 0 },
+    { x: 2, y: 1 },
+    { x: 2, y: 2 },
+  ],
+  blinker: [
+    { x: 0, y: 1 },
+    { x: 1, y: 1 },
+    { x: 2, y: 1 },
+  ],
+  preblock: [
+    { x: 0, y: 0 },
+    { x: 0, y: 1 },
+    { x: 1, y: 0 },
+  ],
+};

@@ -1,9 +1,10 @@
 import { describe, expect, it } from "@jest/globals";
-import { initialBoard, randomBoard, shuffle } from "./commands";
+import { initialBoard, randomBoard, } from "./commands";
 import { CellState } from "./domain";
 import seedrandom from "seedrandom";
 import { range } from "effect/Array";
 import { Effect } from "effect";
+import { shuffle } from "./utils";
 
 describe("The Game of Life", () => {
   const prng = seedrandom("x");

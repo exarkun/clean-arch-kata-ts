@@ -8,12 +8,13 @@ import {
   Board,
   conwayRules,
   emptyBoard,
+  patterns,
   Point,
   recursiveAdvance,
 } from "./domain";
-import { Present, simpleRectangleConsolePresenter } from "./view";
-import { range } from "effect/Array";
+import { decorations, Present, simpleRectangleConsolePresenter } from "./view";
 import { match } from "ts-pattern";
+import { shuffle } from "./utils";
 
 const builder = (yargs: Argv) =>
   yargs.options({
@@ -61,11 +62,25 @@ const builder = (yargs: Argv) =>
     },
     pattern: {
       alias: "p",
-      type: "string",
+      choices: Object.keys(patterns),
+      coerce: (p: string) => validateOption(p, patterns),
       desc: "name of a well-known pattern to start with",
       default: null,
     },
+    style: {
+      choices: Object.keys(decorations),
+      desc: "choose the style of border decorations",
+      default: "fancy",
+    },
   });
+
+const validateOption = <R extends Record<string, unknown>>(s: string, record: R): keyof R => {
+  if (Object.keys(record).includes(s)) {
+    return s;
+  } else {
+    throw new Error(`${s} is not one of the valid options: ${Object.keys(record)}`)
+  }
+  };
 
 const randomEffect = (seed: string) => {
   const prng = seedrandom(seed);
@@ -77,7 +92,7 @@ const makeBoard = (
   height: number,
   cellCount: number,
   seed: string | null,
-  pattern: string | null,
+  pattern: keyof typeof patterns | null,
 ) =>
   seed !== null
     ? randomBoard(width, height, cellCount, randomEffect(seed))
@@ -85,17 +100,8 @@ const makeBoard = (
       ? Effect.succeed(patternBoard(pattern))
       : Effect.sync(() => initialBoard(width, height, cellCount));
 
-const patternBoard = (pattern: string) =>
-  Array.reduce(
-    emptyBoard,
-    birth,
-  )([
-    { x: 0, y: 1 },
-    { x: 1, y: 2 },
-    { x: 2, y: 0 },
-    { x: 2, y: 1 },
-    { x: 2, y: 2 },
-  ]);
+const patternBoard = (pattern: keyof typeof patterns) =>
+  Array.reduce(emptyBoard, birth)(patterns[pattern]);
 
 const pickBackend = (name: string, width: number, height: number) =>
   match(name)
@@ -118,10 +124,15 @@ export const lifeCommand: StrictCommandType<typeof builder> = {
     cellCount,
     seed,
     pattern,
+    style,
   }) {
-    const board = makeBoard(width, height, cellCount, seed, pattern);
+    const board = makeBoard(width, height, cellCount, seed, pattern ?? null /* why isn't it null already? */);
     const advance = pickBackend(backend, width, height)(conwayRules);
-    const present = simpleRectangleConsolePresenter(width, height);
+    const present = simpleRectangleConsolePresenter(
+      width,
+      height,
+      decorations[style as keyof typeof decorations],
+    );
     const simulate = simulationStep(advance, present);
     const delayedSimulate = flow(
       simulate,
@@ -205,15 +216,3 @@ export const randomBoard = (
     Effect.map(Array.reduce(emptyBoard, birth)),
   );
 };
-
-export const shuffle =
-  (prng: Effect.Effect<number, never, never>) =>
-  <X>(xs: X[]): Effect.Effect<X[], never, never> => {
-    return pipe(
-      Effect.Do,
-      Effect.bind("order", () => Effect.replicateEffect(xs.length)(prng)),
-      Effect.let("x", ({ order }) => Array.zip(order, range(0, xs.length))),
-      Effect.let("y", ({ x }) => x.sort()),
-      Effect.map(({ y }) => Array.map(([_, index]) => xs[index])(y)),
-    );
-  };

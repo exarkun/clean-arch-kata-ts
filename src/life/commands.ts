@@ -3,6 +3,7 @@ import seedrandom from "seedrandom";
 import { Argv } from "yargs";
 import { StrictCommandType } from "../lib/cli";
 import {
+  advanceWithStorage,
   birth,
   Board,
   conwayRules,
@@ -12,6 +13,7 @@ import {
 } from "./domain";
 import { Present, simpleRectangleConsolePresenter } from "./view";
 import { range } from "effect/Array";
+import { match } from "ts-pattern";
 
 const builder = (yargs: Argv) =>
   yargs.options({
@@ -45,6 +47,12 @@ const builder = (yargs: Argv) =>
       desc: "the number of milliseconds to wait between generations",
       default: 20,
     },
+    backend: {
+      alias: "b",
+      choices: ["function", "array"],
+      desc: "the game state strategy to use",
+      default: "array",
+    },
     seed: {
       alias: "s",
       type: "string",
@@ -56,7 +64,7 @@ const builder = (yargs: Argv) =>
       type: "string",
       desc: "name of a well-known pattern to start with",
       default: null,
-    }
+    },
   });
 
 const randomEffect = (seed: string) => {
@@ -64,28 +72,57 @@ const randomEffect = (seed: string) => {
   return Effect.sync(prng);
 };
 
-const makeBoard = (width: number, height: number, cellCount: number, seed: string | null, pattern: string | null) => 
-  seed !== null ? randomBoard(width, height, cellCount, randomEffect(seed)) :
-  pattern !== null ? Effect.succeed(patternBoard(pattern)) :
-  Effect.sync(() => initialBoard(width, height, cellCount));
+const makeBoard = (
+  width: number,
+  height: number,
+  cellCount: number,
+  seed: string | null,
+  pattern: string | null,
+) =>
+  seed !== null
+    ? randomBoard(width, height, cellCount, randomEffect(seed))
+    : pattern !== null
+      ? Effect.succeed(patternBoard(pattern))
+      : Effect.sync(() => initialBoard(width, height, cellCount));
 
 const patternBoard = (pattern: string) =>
-  Array.reduce(emptyBoard, birth)([
-    {x: 0, y: 1},
-    {x: 1, y: 2},
-    {x: 2, y: 0},
-    {x: 2, y: 1},
-    {x: 2, y: 2},
+  Array.reduce(
+    emptyBoard,
+    birth,
+  )([
+    { x: 0, y: 1 },
+    { x: 1, y: 2 },
+    { x: 2, y: 0 },
+    { x: 2, y: 1 },
+    { x: 2, y: 2 },
   ]);
+
+const pickBackend = (name: string, width: number, height: number) =>
+  match(name)
+    .with("function", () => recursiveAdvance)
+    .with("array", () => advanceWithStorage(width, height))
+    .otherwise(() => {
+      throw new Error("zoops");
+    });
 
 export const lifeCommand: StrictCommandType<typeof builder> = {
   command: "life",
   describe: "Simulate the game of life",
   builder,
-  async handler({ width, height, delay, maxTurns, cellCount, seed, pattern }) {
+  async handler({
+    backend,
+    width,
+    height,
+    delay,
+    maxTurns,
+    cellCount,
+    seed,
+    pattern,
+  }) {
     const board = makeBoard(width, height, cellCount, seed, pattern);
+    const advance = pickBackend(backend, width, height)(conwayRules);
     const present = simpleRectangleConsolePresenter(width, height);
-    const simulate = simulationStep(recursiveAdvance(conwayRules), present);
+    const simulate = simulationStep(advance, present);
     const delayedSimulate = flow(
       simulate,
       Effect.tap(() => Effect.sleep(delay)),

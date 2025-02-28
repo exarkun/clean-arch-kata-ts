@@ -1,4 +1,5 @@
 import { Number, Struct } from "effect";
+import { range } from "effect/Array";
 import { match } from "ts-pattern";
 
 /**
@@ -149,3 +150,20 @@ export const recursiveAdvance =
       return rule(board(p), new Set(aliveInDirection));
     };
   };
+
+export const newStoreBoard = (
+  width: number,
+  height: number,
+  state: Board,
+): Board => {
+  const b = range(0, width - 1).map((x) =>
+    range(0, height - 1).map((y) => state({ x, y })),
+  );
+  return (p: Point) => b[p.x]?.[p.y] ?? CellState.Dead;
+};
+
+export const advanceWithStorage =
+  (width: number, height: number) =>
+  (rule: StateChangeRule) =>
+  (board: Board): Board =>
+    newStoreBoard(width, height, recursiveAdvance(rule)(board));

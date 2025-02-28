@@ -41,15 +41,10 @@ export type Board = (p: Point) => CellState;
  * Define a new Board like another board but on which the cell at a given
  * coordinate is alive.
  */
-export const birth = (b: Board, p: Point): Board => {
-  return (p2: Point) => {
-    if (eqPoint(p, p2)) {
-      return CellState.Living;
-    } else {
-      return b(p2);
-    }
-  };
-};
+export const birth =
+  (b: Board, p: Point): Board =>
+  (p2: Point) =>
+    eqPoint(p, p2) ? CellState.Living : b(p2);
 
 /**
  * Define a Board with only dead cells.
@@ -134,16 +129,12 @@ export type StateChangeRule = (
 /**
  * Define the standard rules of Conway's Game of Life.
  */
-export const conwayRules: StateChangeRule = (state, allLivingNeighbors) => {
-  const n = allLivingNeighbors.size;
-  if (state === CellState.Dead && n === 3) {
-    return CellState.Living;
-  } else if (state === CellState.Living && n >= 2 && n <= 3) {
-    return CellState.Living;
-  } else {
-    return CellState.Dead;
-  }
-};
+export const conwayRules: StateChangeRule = (state, allLivingNeighbors) =>
+  match([state, allLivingNeighbors.size])
+    .with([CellState.Dead, 3], () => CellState.Living)
+    .with([CellState.Living, 2], () => CellState.Living)
+    .with([CellState.Living, 3], () => CellState.Living)
+    .otherwise(() => CellState.Dead);
 
 /**
  * Define the Board recursively in terms of all earlier Boards.

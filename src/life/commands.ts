@@ -51,6 +51,12 @@ const builder = (yargs: Argv) =>
       desc: "A value to use to seed the PRNG",
       default: null,
     },
+    pattern: {
+      alias: "p",
+      type: "string",
+      desc: "name of a well-known pattern to start with",
+      default: null,
+    }
   });
 
 const randomEffect = (seed: string) => {
@@ -58,15 +64,26 @@ const randomEffect = (seed: string) => {
   return Effect.sync(prng);
 };
 
+const makeBoard = (width: number, height: number, cellCount: number, seed: string | null, pattern: string | null) => 
+  seed !== null ? randomBoard(width, height, cellCount, randomEffect(seed)) :
+  pattern !== null ? Effect.succeed(patternBoard(pattern)) :
+  Effect.sync(() => initialBoard(width, height, cellCount));
+
+const patternBoard = (pattern: string) =>
+  Array.reduce(emptyBoard, birth)([
+    {x: 0, y: 1},
+    {x: 1, y: 2},
+    {x: 2, y: 0},
+    {x: 2, y: 1},
+    {x: 2, y: 2},
+  ]);
+
 export const lifeCommand: StrictCommandType<typeof builder> = {
   command: "life",
   describe: "Simulate the game of life",
   builder,
-  async handler({ width, height, delay, maxTurns, cellCount, seed }) {
-    const board =
-      seed === null
-        ? Effect.sync(() => initialBoard(width, height, cellCount))
-        : randomBoard(width, height, cellCount, randomEffect(seed));
+  async handler({ width, height, delay, maxTurns, cellCount, seed, pattern }) {
+    const board = makeBoard(width, height, cellCount, seed, pattern);
     const present = simpleRectangleConsolePresenter(width, height);
     const simulate = simulationStep(recursiveAdvance(conwayRules), present);
     const delayedSimulate = flow(

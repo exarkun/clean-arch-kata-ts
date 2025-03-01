@@ -1,4 +1,4 @@
-import { Array, Effect, flow, Option, pipe } from "effect";
+import { Array, Effect, flow, pipe } from "effect";
 import seedrandom from "seedrandom";
 import { Argv } from "yargs";
 import { StrictCommandType } from "../lib/cli";
@@ -8,13 +8,14 @@ import {
   Board,
   conwayRules,
   emptyBoard,
+  initialBoard,
   patterns,
-  Point,
+  randomBoard,
   recursiveAdvance,
 } from "./domain";
 import { decorations, simpleRectangleConsolePresenter } from "./view";
 import { match } from "ts-pattern";
-import { finally_, shuffle } from "./utils";
+import { finally_, iterateEffect } from "./utils";
 
 const builder = (yargs: Argv) =>
   yargs.options({
@@ -74,13 +75,18 @@ const builder = (yargs: Argv) =>
     },
   });
 
-const validateOption = <R extends Record<string, unknown>>(s: string, record: R): keyof R => {
+const validateOption = <R extends Record<string, unknown>>(
+  s: string,
+  record: R,
+): keyof R => {
   if (Object.keys(record).includes(s)) {
     return s;
   } else {
-    throw new Error(`${s} is not one of the valid options: ${Object.keys(record)}`)
+    throw new Error(
+      `${s} is not one of the valid options: ${Object.keys(record)}`,
+    );
   }
-  };
+};
 
 const randomEffect = (seed: string) => {
   const prng = seedrandom(seed);
@@ -126,7 +132,13 @@ export const lifeCommand: StrictCommandType<typeof builder> = {
     pattern,
     style,
   }) {
-    const boardEff = makeBoard(width, height, cellCount, seed, pattern ?? null /* why isn't it null already? */);
+    const boardEff = makeBoard(
+      width,
+      height,
+      cellCount,
+      seed,
+      pattern ?? null /* why isn't it null already? */,
+    );
     const advance = pickBackend(backend, width, height)(conwayRules);
     const present = simpleRectangleConsolePresenter(
       width,
@@ -143,78 +155,17 @@ export const lifeCommand: StrictCommandType<typeof builder> = {
       Effect.andThen(() => boardEff),
       Effect.flatMap((b) => iterateEffect(delayedSimulate, b, maxTurns)),
       finally_(present.cleanup),
-      Effect.runPromise
+      Effect.runPromise,
     );
   },
 };
 
 const simulationStep =
-  (advance: (b: Board) => Board, present: (b: Board) => Effect.Effect<void, Error, never>) =>
+  (
+    advance: (b: Board) => Board,
+    present: (b: Board) => Effect.Effect<void, Error, never>,
+  ) =>
   (state: Board): Effect.Effect<Board, Error, never> => {
     const eff = Effect.tap(Effect.succeed(state), present);
     return Effect.map((b: Board) => advance(b))(eff);
   };
-
-const iterateEffect = <S, E extends Error>(
-  f: (s: S) => Effect.Effect<S, E, never>,
-  s: S,
-  n: number,
-): Effect.Effect<S, E, never> => {
-  if (n <= 0) {
-    return Effect.succeed(s);
-  } else {
-    return pipe(
-      s,
-      f,
-      Effect.flatMap((ss) => iterateEffect(f, ss, n - 1)),
-    );
-  }
-};
-
-/**
- * Define the simple initial board state.
- */
-export const initialBoard = (
-  width: number,
-  height: number,
-  numStartingAlive: number,
-): Board => {
-  const seed: { n: number; p: Point } = {
-    n: numStartingAlive,
-    p: { x: -1, y: 0 },
-  };
-  const nextPoint = ({ x, y }: Point): Point =>
-    x < width - 1 ? { x: x + 1, y } : { x: 0, y: y + 1 };
-
-  const startingAliveCells = Array.unfold(seed, ({ n, p }) => {
-    if (n <= 0) {
-      return Option.none();
-    } else {
-      const p_ = nextPoint(p);
-      return Option.some([p_, { n: n - 1, p: p_ }]);
-    }
-  });
-  return Array.reduce(emptyBoard, birth)(startingAliveCells);
-};
-
-/**
- * Define a random initial board state.
- */
-export const randomBoard = (
-  width: number,
-  height: number,
-  aliveCellCount: number,
-  prng: Effect.Effect<number, never, never>,
-): Effect.Effect<Board, never, never> => {
-  const coords = Array.cartesian(
-    Array.range(0, width - 1),
-    Array.range(0, height - 1),
-  );
-  return pipe(
-    coords,
-    Array.map(([x, y]) => ({ x, y })),
-    shuffle(prng),
-    Effect.map(Array.take(aliveCellCount)),
-    Effect.map(Array.reduce(emptyBoard, birth)),
-  );
-};

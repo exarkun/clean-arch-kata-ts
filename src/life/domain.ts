@@ -1,6 +1,8 @@
-import { Number, Struct } from "effect";
-import { range } from "effect/Array";
+import { Option, Effect, Number, Struct } from "effect";
+import { unfold, cartesian, map, range, reduce, take } from "effect/Array";
 import { match } from "ts-pattern";
+import { shuffle } from "./utils";
+import { pipe } from "fp-ts/lib/function";
 
 /**
  * Denote the status of a single cell.
@@ -189,4 +191,52 @@ export const patterns = {
     { x: 0, y: 1 },
     { x: 1, y: 0 },
   ],
+};
+
+/**
+ * Define the simple initial board state.
+ */
+export const initialBoard = (
+  width: number,
+  height: number,
+  numStartingAlive: number,
+): Board => {
+  const seed: { n: number; p: Point } = {
+    n: numStartingAlive,
+    p: { x: -1, y: 0 },
+  };
+  const nextPoint = ({ x, y }: Point): Point =>
+    x < width - 1 ? { x: x + 1, y } : { x: 0, y: y + 1 };
+
+  const startingAliveCells = unfold(seed, ({ n, p }) => {
+    if (n <= 0) {
+      return Option.none();
+    } else {
+      const p_ = nextPoint(p);
+      return Option.some([p_, { n: n - 1, p: p_ }]);
+    }
+  });
+  return reduce(emptyBoard, birth)(startingAliveCells);
+};
+
+/**
+ * Define a random initial board state.
+ */
+export const randomBoard = (
+  width: number,
+  height: number,
+  aliveCellCount: number,
+  prng: Effect.Effect<number, never, never>,
+): Effect.Effect<Board, never, never> => {
+  const coords = cartesian(
+    range(0, width - 1),
+    range(0, height - 1),
+  );
+  return pipe(
+    coords,
+    map(([x, y]) => ({ x, y })),
+    shuffle(prng),
+    Effect.map(take(aliveCellCount)),
+    Effect.map(reduce(emptyBoard, birth)),
+  );
 };

@@ -48,6 +48,27 @@ export const finally_ =
     );
 
 /**
+ * Call a function and perform the resulting Effect some number of times,
+ * using the result of each Effect as the argument to the function call
+ * next time.
+ */
+export const iterateEffect = <S, E extends Error>(
+  f: (s: S) => Effect.Effect<S, E, never>,
+  s: S,
+  n: number,
+): Effect.Effect<S, E, never> => {
+  if (n <= 0) {
+    return Effect.succeed(s);
+  } else {
+    return pipe(
+      s,
+      f,
+      Effect.flatMap((ss) => iterateEffect(f, ss, n - 1)),
+    );
+  }
+};
+
+/**
  * Order tuples by the order of their first element only.
  */
 const ordTuple = Ord.fromCompare<readonly [number, unknown]>((a, b) =>

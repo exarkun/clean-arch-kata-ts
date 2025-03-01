@@ -12,9 +12,9 @@ import {
   Point,
   recursiveAdvance,
 } from "./domain";
-import { decorations, Present, simpleRectangleConsolePresenter } from "./view";
+import { decorations, simpleRectangleConsolePresenter } from "./view";
 import { match } from "ts-pattern";
-import { shuffle } from "./utils";
+import { finally_, shuffle } from "./utils";
 
 const builder = (yargs: Argv) =>
   yargs.options({
@@ -126,28 +126,30 @@ export const lifeCommand: StrictCommandType<typeof builder> = {
     pattern,
     style,
   }) {
-    const board = makeBoard(width, height, cellCount, seed, pattern ?? null /* why isn't it null already? */);
+    const boardEff = makeBoard(width, height, cellCount, seed, pattern ?? null /* why isn't it null already? */);
     const advance = pickBackend(backend, width, height)(conwayRules);
     const present = simpleRectangleConsolePresenter(
       width,
       height,
       decorations[style as keyof typeof decorations],
     );
-    const simulate = simulationStep(advance, present);
+    const simulate = simulationStep(advance, present.present);
     const delayedSimulate = flow(
       simulate,
       Effect.tap(() => Effect.sleep(delay)),
     );
-    const eff = pipe(
-      board,
+    await pipe(
+      present.setup,
+      Effect.andThen(() => boardEff),
       Effect.flatMap((b) => iterateEffect(delayedSimulate, b, maxTurns)),
+      finally_(present.cleanup),
+      Effect.runPromise
     );
-    await Effect.runPromise(eff);
   },
 };
 
 const simulationStep =
-  (advance: (b: Board) => Board, present: Present) =>
+  (advance: (b: Board) => Board, present: (b: Board) => Effect.Effect<void, Error, never>) =>
   (state: Board): Effect.Effect<Board, Error, never> => {
     const eff = Effect.tap(Effect.succeed(state), present);
     return Effect.map((b: Board) => advance(b))(eff);

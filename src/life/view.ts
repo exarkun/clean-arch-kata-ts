@@ -12,9 +12,13 @@ import { Monad2C } from "fp-ts/lib/Monad";
 import { replicate } from "./utils";
 
 /**
- * Denote presentation of the given board state.
+ * Denote an Effect which presents the given board state.
  */
-export type Present = (board: Board) => Effect.Effect<void, Error, never>;
+export type Present = {
+  setup: Effect.Effect<void, Error, never>;
+  present: (board: Board) => Effect.Effect<void, Error, never>;
+  cleanup: Effect.Effect<void, Error, never>;
+};
 
 /**
  * Represent the visual presentation of an outer rectangular border.
@@ -28,23 +32,37 @@ export type BorderDecorations = {
   bottomRightCorner: string;
 };
 
+/**
+ * Create a rectangular Board Presenter with the given dimensions and decorations.
+ */
 export const simpleRectangleConsolePresenter = (
   width: number,
   height: number,
   decorations: BorderDecorations,
 ): Present => {
   const toString = boardToString(width, height, decorations);
-  return (board: Board) =>
-    Effect.sync(() => {
-      ANSITerminal.home();
-      ANSITerminal.write(toString(board));
-    });
+  return {
+    setup: Effect.sync(() => {
+      ANSITerminal.clear();
+      ANSITerminal.hideCursor();
+    }),
+    present: (board: Board) =>
+      Effect.sync(() => {
+        ANSITerminal.home();
+        ANSITerminal.write(toString(board));
+      }),
+    cleanup: Effect.sync(() => {
+      ANSITerminal.showCursor();
+    }),
+  };
 };
 
 const ANSITerminal = {
   clear: () => process.stdout.write("\x1B[2J"),
   home: () => process.stdout.write("\x1B[H"),
   write: (s: string) => process.stdout.write(s),
+  showCursor: () => process.stdout.write("\x1b[?25h"),
+  hideCursor: () => process.stdout.write("\x1b[?25l"),
 };
 
 const formatCell = (cell: CellState): string =>
@@ -72,6 +90,11 @@ export const decorations = {
   },
 };
 
+/**
+ * Define a rendering of a Board to a string.
+ *
+ * Only the part of the board that falls within (0,0) - (width - 1,height - 1) will be rendered.
+ */
 const boardToString = (
   width: number,
   height: number,
@@ -114,6 +137,11 @@ const boardToString = (
     );
 };
 
+/**
+ * Render one row of a Board as a string.
+ *
+ * Only cells that fall within (0, width - 1) will be rendered.
+ */
 const renderRowString = (
   nextLine: string,
   sideBorder: string,

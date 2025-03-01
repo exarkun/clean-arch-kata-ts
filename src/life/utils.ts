@@ -4,6 +4,7 @@ import { range } from "fp-ts/lib/NonEmptyArray";
 import { Array } from "effect";
 import * as ReadonlyArray from "fp-ts/lib/ReadonlyArray";
 import * as Ord from "fp-ts/lib/Ord";
+import { isLeft } from "effect/Either";
 
 /**
  * Re-arrange the elements of an array based on the output of a PRNG.
@@ -25,6 +26,26 @@ export const shuffle =
 
 export const replicate = (s: string, n: number): string =>
   n <= 0 ? "" : s + replicate(s, n - 1);
+
+export const finally_ =
+  (handler: Effect.Effect<void, Error, never>) =>
+  <R, C>(program: Effect.Effect<R, Error, C>): Effect.Effect<R, Error, C> =>
+    pipe(
+      program,
+      Effect.either,
+      Effect.andThen((result) =>
+        pipe(
+          handler,
+          Effect.andThen(() => {
+            if (isLeft(result)) {
+              throw result.left;
+            } else {
+              return result;
+            }
+          }),
+        ),
+      ),
+    );
 
 /**
  * Order tuples by the order of their first element only.

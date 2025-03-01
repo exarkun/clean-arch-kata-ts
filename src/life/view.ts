@@ -26,6 +26,8 @@ export const simpleRectangleConsolePresenter =
     const nextLine = "\n";
 
     return Effect.sync(() => {
+      process.stdout.write('\x1B[2J');
+      process.stdout.write('\x1B[H')
       process.stdout.write(topBorder);
       for (let y = 0; y < height; ++y) {
         process.stdout.write(nextLine + sideBorder);

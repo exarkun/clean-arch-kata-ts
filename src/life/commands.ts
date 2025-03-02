@@ -9,6 +9,7 @@ import {
   makePatternBoard,
   patterns,
   pickBackend,
+  Point,
   randomBoard,
 } from "./domain";
 import { decorations, simpleRectangleConsolePresenter } from "./view";
@@ -62,6 +63,7 @@ const pattern = Options.choice("pattern", Object.keys(patterns)).pipe(
   Options.optional,
   Options.withAlias("p"),
   Options.withDescription("name of a well-known pattern to start with"),
+  Options.map(Option.map((x) => patterns[validateOption(x, patterns)]))
 );
 const style = Options.choice("style", Object.keys(decorations)).pipe(
   Options.withDefault("fancy"),
@@ -89,7 +91,7 @@ type LifeOptions = {
   delay: number;
   backend: string;
   seed: Option.Option<string>;
-  pattern: Option.Option<string>;
+  pattern: Option.Option<readonly Point[]>;
   style: string;
 };
 
@@ -166,7 +168,7 @@ const makeBoard = (
   height: number,
   cellCount: number,
   optionalSeed: Option.Option<string>,
-  optionalPattern: Option.Option<string>,
+  optionalPattern: Option.Option<readonly Point[]>,
 ) =>
   pipe(
     optionalSeed,
@@ -177,7 +179,7 @@ const makeBoard = (
         pipe(
           optionalPattern,
           Option.match({
-            onSome: (pattern) => Effect.succeed(makePatternBoard(pattern as keyof typeof patterns)),
+            onSome: (pattern) => Effect.succeed(makePatternBoard(pattern)),
             onNone: () =>
               Effect.sync(() => initialBoard(width, height, cellCount)),
           }),

@@ -171,8 +171,8 @@ export const advanceWithStorage =
     newStoreBoard(width, height, recursiveAdvance(rule)(board));
 
 export const backends = {
-  "function": recursiveAdvance,
-  "array": advanceWithStorage,
+  function: recursiveAdvance,
+  array: advanceWithStorage,
 };
 
 /**
@@ -243,8 +243,10 @@ export const randomBoard = (
   );
 };
 
-export const makePatternBoard = (pattern: keyof typeof patterns) =>
-  reduce(emptyBoard, birth)(patterns[pattern]);
+export const makePatternBoard: (points: readonly Point[]) => Board = reduce(
+  emptyBoard,
+  birth,
+);
 
 export const pickBackend = (name: string, width: number, height: number) =>
   match(name)

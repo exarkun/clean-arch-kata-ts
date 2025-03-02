@@ -5,7 +5,17 @@ import { Array } from "effect";
 import * as ReadonlyArray from "fp-ts/lib/ReadonlyArray";
 import * as Ord from "fp-ts/lib/Ord";
 import { isLeft } from "effect/Either";
+import seedrandom from "seedrandom";
 
+/**
+ * Create an Effect which produces a new pseudo-random number each
+ * time it is evaluated.
+ */
+export const randomEffect = (seed: string) => {
+    const prng = seedrandom(seed);
+    return Effect.sync(prng);
+  };
+  
 /**
  * Re-arrange the elements of an array based on the output of a PRNG.
  */

@@ -228,10 +228,7 @@ export const randomBoard = (
   aliveCellCount: number,
   prng: Effect.Effect<number, never, never>,
 ): Effect.Effect<Board, never, never> => {
-  const coords = cartesian(
-    range(0, width - 1),
-    range(0, height - 1),
-  );
+  const coords = cartesian(range(0, width - 1), range(0, height - 1));
   return pipe(
     coords,
     map(([x, y]) => ({ x, y })),
@@ -239,4 +236,23 @@ export const randomBoard = (
     Effect.map(take(aliveCellCount)),
     Effect.map(reduce(emptyBoard, birth)),
   );
+};
+
+export const makePatternBoard = (pattern: keyof typeof patterns) =>
+  reduce(emptyBoard, birth)(patterns[pattern]);
+
+export const pickBackend = (name: string, width: number, height: number) =>
+  match(name)
+    .with("function", () => recursiveAdvance)
+    .with("array", () => advanceWithStorage(width, height))
+    .otherwise(() => {
+      throw new Error("zoops");
+    });
+
+/**
+ * Denote a value which is computed through a number of iterations.
+ */
+export type Iterated<A> = {
+  iteration: number;
+  value: A;
 };

@@ -1,5 +1,5 @@
 import { Effect } from "effect";
-import { Board, CellState } from "./domain";
+import { Board, CellState, Iterated } from "./domain";
 import { match } from "ts-pattern";
 import { compose } from "effect/Function";
 import * as Writer from "fp-ts/Writer";
@@ -14,9 +14,9 @@ import { replicate } from "./utils";
 /**
  * Denote an Effect which presents the given board state.
  */
-export type Present = {
+export type Present<A> = {
   setup: Effect.Effect<void, Error, never>;
-  present: (board: Board) => Effect.Effect<void, Error, never>;
+  present: (value: A) => Effect.Effect<void, Error, never>;
   cleanup: Effect.Effect<void, Error, never>;
 };
 
@@ -39,14 +39,14 @@ export const simpleRectangleConsolePresenter = (
   width: number,
   height: number,
   decorations: BorderDecorations,
-): Present => {
+): Present<Iterated<Board>> => {
   const toString = boardToString(width, height, decorations);
   return {
     setup: Effect.sync(() => {
       ANSITerminal.clear();
       ANSITerminal.hideCursor();
     }),
-    present: (board: Board) =>
+    present: (board: Iterated<Board>) =>
       Effect.sync(() => {
         ANSITerminal.home();
         ANSITerminal.write(toString(board));
@@ -108,11 +108,20 @@ const boardToString = (
   }: BorderDecorations,
 ) => {
   const nextLine = "\n";
-  const topBorder = Writer.tell([
-    topLeftCorner,
-    replicate(horizontal, width),
-    topRightCorner,
-  ]);
+  const makeTopBorder = (label: string) => {
+    const fillSize = (width - 2 - label.length / 2) / 2;
+    const prefix = replicate(horizontal, Math.floor(fillSize));
+    const suffix = replicate(horizontal, Math.ceil(fillSize));
+    return Writer.tell([
+      topLeftCorner,
+      prefix,
+      "┤ ",
+      label,
+      " ├",
+      suffix,
+      topRightCorner,
+    ]);
+  };
   const bottomBorder = Writer.tell([
     nextLine,
     bottomLeftCorner,
@@ -124,11 +133,11 @@ const boardToString = (
   const renderForWidth = renderRowString(nextLine, sideBorder, width);
   const ys = range(0, height - 1);
 
-  return (board: Board): string =>
+  return ({ iteration, value }: Iterated<Board>): string =>
     pipe(
       [
-        topBorder,
-        pipe(ys, traverse(renderForWidth(board)), voidW),
+        makeTopBorder(`Generation ${iteration.toString().padStart(5)}`),
+        pipe(ys, traverse(renderForWidth(value)), voidW),
         bottomBorder,
       ],
       sequence,

@@ -6,6 +6,7 @@ import {
   Board,
   conwayRules,
   initialBoard,
+  Iterated,
   makePatternBoard,
   patterns,
   pickBackend,
@@ -121,22 +122,27 @@ export const lifeCommand: StrictCommandType<typeof builder> = {
     await pipe(
       present.setup,
       Effect.andThen(() => boardEff),
-      Effect.flatMap((b) => iterateEffect(delayedSimulate, b, maxTurns)),
+      Effect.flatMap((b) =>
+        iterateEffect(delayedSimulate, { iteration: 0, value: b }, maxTurns),
+      ),
       finally_(present.cleanup),
       Effect.runPromise,
     );
   },
 };
 
-const simulationStep =
-  (
-    advance: (b: Board) => Board,
-    present: (b: Board) => Effect.Effect<void, Error, never>,
-  ) =>
-  (state: Board): Effect.Effect<Board, Error, never> => {
-    const eff = Effect.tap(Effect.succeed(state), present);
-    return Effect.map((b: Board) => advance(b))(eff);
-  };
+const simulationStep = (
+  advance: (b: Board) => Board,
+  present: (b: Iterated<Board>) => Effect.Effect<void, Error, never>,
+) =>
+  flow(
+    Effect.succeed<Iterated<Board>>,
+    Effect.tap(present),
+    Effect.map(({ iteration, value }) => ({
+      iteration: iteration + 1,
+      value: advance(value),
+    })),
+  );
 
 const randomEffect = (seed: string) => {
   const prng = seedrandom(seed);

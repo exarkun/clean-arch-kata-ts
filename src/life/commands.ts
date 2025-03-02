@@ -63,17 +63,15 @@ const backend = Options.choice("backend", Object.keys(backends)).pipe(
   Options.withAlias("b"),
   Options.withDescription("the game state strategy to use"),
 );
-const pattern = Options.choice("pattern", Object.keys(patterns)).pipe(
+const pattern = Options.choiceWithValue("pattern", Object.entries(patterns)).pipe(
   Options.optional,
   Options.withAlias("p"),
   Options.withDescription("name of a well-known pattern to start with"),
-  Options.map(Option.map((x) => patterns[validateOption(x, patterns)])),
 );
-const style = Options.choice("style", Object.keys(decorations)).pipe(
-  Options.withDefault("fancy"),
+const style = Options.choiceWithValue("style", Object.entries(decorations)).pipe(
+  Options.withDefault(decorations.fancy),
   Options.withAlias("S"),
   Options.withDescription("choose the style of border decorations"),
-  Options.map((x) => decorations[validateOption(x, decorations)]),
 );
 
 const lifeOptions = {
@@ -132,19 +130,6 @@ const lifeImpl = ({
 export const lifeCommand = Command.make("life", lifeOptions, lifeImpl).pipe(
   Command.withDescription("Simulate the game of life"),
 );
-
-const validateOption = <R extends Record<string, unknown>>(
-  s: string,
-  record: R,
-): keyof R => {
-  if (Object.keys(record).includes(s)) {
-    return s;
-  } else {
-    throw new Error(
-      `${s} is not one of the valid options: ${Object.keys(record)}`,
-    );
-  }
-};
 
 const simulationStep = (
   advance: (b: Board) => Board,

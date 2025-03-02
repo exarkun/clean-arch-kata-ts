@@ -1,20 +1,17 @@
-import { Array, Effect, flow, pipe } from "effect";
+import { Effect, flow, pipe } from "effect";
 import seedrandom from "seedrandom";
 import { Argv } from "yargs";
 import { StrictCommandType } from "../lib/cli";
 import {
-  advanceWithStorage,
-  birth,
   Board,
   conwayRules,
-  emptyBoard,
   initialBoard,
+  makePatternBoard,
   patterns,
+  pickBackend,
   randomBoard,
-  recursiveAdvance,
 } from "./domain";
 import { decorations, simpleRectangleConsolePresenter } from "./view";
-import { match } from "ts-pattern";
 import { finally_, iterateEffect } from "./utils";
 
 const builder = (yargs: Argv) =>
@@ -88,35 +85,6 @@ const validateOption = <R extends Record<string, unknown>>(
   }
 };
 
-const randomEffect = (seed: string) => {
-  const prng = seedrandom(seed);
-  return Effect.sync(prng);
-};
-
-const makeBoard = (
-  width: number,
-  height: number,
-  cellCount: number,
-  seed: string | null,
-  pattern: keyof typeof patterns | null,
-) =>
-  seed !== null
-    ? randomBoard(width, height, cellCount, randomEffect(seed))
-    : pattern !== null
-      ? Effect.succeed(patternBoard(pattern))
-      : Effect.sync(() => initialBoard(width, height, cellCount));
-
-const patternBoard = (pattern: keyof typeof patterns) =>
-  Array.reduce(emptyBoard, birth)(patterns[pattern]);
-
-const pickBackend = (name: string, width: number, height: number) =>
-  match(name)
-    .with("function", () => recursiveAdvance)
-    .with("array", () => advanceWithStorage(width, height))
-    .otherwise(() => {
-      throw new Error("zoops");
-    });
-
 export const lifeCommand: StrictCommandType<typeof builder> = {
   command: "life",
   describe: "Simulate the game of life",
@@ -169,3 +137,21 @@ const simulationStep =
     const eff = Effect.tap(Effect.succeed(state), present);
     return Effect.map((b: Board) => advance(b))(eff);
   };
+
+const randomEffect = (seed: string) => {
+  const prng = seedrandom(seed);
+  return Effect.sync(prng);
+};
+
+const makeBoard = (
+  width: number,
+  height: number,
+  cellCount: number,
+  seed: string | null,
+  pattern: keyof typeof patterns | null,
+) =>
+  seed !== null
+    ? randomBoard(width, height, cellCount, randomEffect(seed))
+    : pattern !== null
+      ? Effect.succeed(makePatternBoard(pattern))
+      : Effect.sync(() => initialBoard(width, height, cellCount));

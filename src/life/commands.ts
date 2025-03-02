@@ -18,19 +18,44 @@ import {
 } from "./view";
 import { finally_, iterateEffect, randomEffect } from "./utils";
 import { Command, Options } from "@effect/cli";
+import { invalidValue } from "@effect/cli/ValidationError";
+import * as Spans from "@effect/cli/HelpDoc/Span";
+import { p } from "@effect/cli/HelpDoc";
+
+const withMinimum = (n: number) => (o: Options.Options<number>) =>
+  pipe(
+    o,
+    Options.map((m: number) => {
+      if (m < n) {
+        // From https://github.com/Effect-TS/effect/blob/main/packages/cli/src/internal/primitive.ts#L417 
+        // it looks like Effect.orElseFail might be the right way to produce parse errors.  This way 
+        // produces extremely ugly errors.
+        throw invalidValue(p(Spans.error(
+          `${Options.getIdentifier(o)}: ${m} is less than the minimum allowed value ${n}`,
+        )));
+      } else {
+        return m;
+      }
+    }),
+  );
 
 const width = Options.integer("width").pipe(
-  Options.withDefault(80),
+  // The adjustment here comes from knowledge of how the renderer works, which of course doesn't belong here.
+  Options.withDefault(process.stdout.columns / 2 - 2),
+  withMinimum(1),
   Options.withAlias("w"),
   Options.withDescription("the size of the board on the x axis"),
 );
 const height = Options.integer("height").pipe(
-  Options.withDefault(40),
+  // See comment on width about the adjustment to the rows value.
+  Options.withDefault(process.stdout.rows - 3),
+  withMinimum(1),
   Options.withAlias("h"),
   Options.withDescription("the size of the board on the y axis"),
 );
 const maxTurns = Options.integer("max-turns").pipe(
   Options.withDefault(20),
+  withMinimum(0),
   Options.withAlias("m"),
   Options.withDescription(
     "the maximum number of generations for which to run the game",
@@ -38,6 +63,7 @@ const maxTurns = Options.integer("max-turns").pipe(
 );
 const cellCount = Options.integer("cell-count").pipe(
   Options.withDefault(15),
+  withMinimum(0),
   Options.withAlias("c"),
   Options.withDescription(
     "the number of cells which will be alive in the initial game state",
@@ -45,6 +71,7 @@ const cellCount = Options.integer("cell-count").pipe(
 );
 const delay = Options.integer("iteration-delay").pipe(
   Options.withDefault(200),
+  withMinimum(0),
   Options.withAlias("d"),
   Options.withDescription(
     "the number of milliseconds to wait between generations",
@@ -63,12 +90,18 @@ const backend = Options.choice("backend", Object.keys(backends)).pipe(
   Options.withAlias("b"),
   Options.withDescription("the game state strategy to use"),
 );
-const pattern = Options.choiceWithValue("pattern", Object.entries(patterns)).pipe(
+const pattern = Options.choiceWithValue(
+  "pattern",
+  Object.entries(patterns),
+).pipe(
   Options.optional,
   Options.withAlias("p"),
   Options.withDescription("name of a well-known pattern to start with"),
 );
-const style = Options.choiceWithValue("style", Object.entries(decorations)).pipe(
+const style = Options.choiceWithValue(
+  "style",
+  Object.entries(decorations),
+).pipe(
   Options.withDefault(decorations.fancy),
   Options.withAlias("S"),
   Options.withDescription("choose the style of border decorations"),

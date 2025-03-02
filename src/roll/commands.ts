@@ -1,39 +1,42 @@
 import seedrandom from "seedrandom";
-import { Argv } from "yargs";
-import { StrictCommandType } from "../lib/cli";
 import { rollDice } from "./domain";
+import { Command, Options } from "@effect/cli";
+import { Console } from "effect";
 
-const builder = (yargs: Argv) =>
-  yargs.options({
-    number: {
-      alias: "n",
-      type: "number",
-      desc: "the number of dice rolls",
-      default: 1,
-    },
-    "dice-size": {
-      alias: "d",
-      type: "number",
-      desc: "the number of sides on the dice",
-      default: 6,
-    },
-    seed: {
-      alias: "s",
-      type: "string",
-      desc: "seed for the PRNG",
-    },
-  });
-
-export const rollCommand: StrictCommandType<typeof builder> = {
-  command: "roll",
-  describe: "simulate a dice roll",
-  builder,
-  handler({ diceSize, number, seed }) {
-    const roll = rollDice({
-      diceSize,
-      rolls: number,
-    })(seedrandom(seed));
-
-    console.info(roll());
-  },
+const diceSize = Options.integer("dice-size").pipe(
+  Options.withAlias("d"),
+  Options.withDescription("the number of sides on the dice"),
+  Options.withDefault(6),
+);
+const diceCount = Options.integer("number").pipe(
+  Options.withAlias("n"),
+  Options.withDescription("the number of dice rolls"),
+  Options.withDefault(1),
+);
+const seed = Options.text("seed").pipe(
+  Options.withAlias("s"),
+  Options.withDescription("seed for the PRNG"),
+);
+const rollOptions = {
+  diceSize,
+  diceCount,
+  seed,
 };
+
+type RollOptions = {
+  diceSize: number;
+  diceCount: number;
+  seed: string;
+};
+const rollImpl = ({ diceSize, diceCount, seed }: RollOptions) => {
+  const roll = rollDice({
+    diceSize,
+    rolls: diceCount,
+  })(seedrandom(seed));
+
+  return Console.info(roll());
+};
+
+export const rollCommand = Command.make("roll", rollOptions, rollImpl).pipe(
+  Command.withDescription("simulate a dice roll"),
+);

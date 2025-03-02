@@ -2,9 +2,13 @@ import { lifeCommand } from "../life/commands";
 import { Command } from "@effect/cli"
 import { NodeContext, NodeRuntime } from "@effect/platform-node"
 import { Effect } from "effect"
+import { greetCommand } from "src/greet/commands";
+import { rollCommand } from "src/roll/commands";
 
 const program = Command.make("cli").pipe(Command.withSubcommands([
   lifeCommand,
+  greetCommand,
+  rollCommand,
 ]));
 
 const cli = Command.run(program, { name: "Clean Arch Kata CLI", version: "0.0.1" });

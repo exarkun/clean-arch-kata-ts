@@ -170,6 +170,11 @@ export const advanceWithStorage =
   (board: Board): Board =>
     newStoreBoard(width, height, recursiveAdvance(rule)(board));
 
+export const backends = {
+  "function": recursiveAdvance,
+  "array": advanceWithStorage,
+};
+
 /**
  * Define the living cells that make up a few well-known patterns.
  */

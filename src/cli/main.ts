@@ -1,23 +1,12 @@
-import yargs from "yargs";
-import { hideBin } from "yargs/helpers";
-import { db } from "../data/db";
-import { greetCommand } from "../greet/commands";
 import { lifeCommand } from "../life/commands";
-import { rollCommand } from "../roll/commands";
+import { Command } from "@effect/cli"
+import { NodeContext, NodeRuntime } from "@effect/platform-node"
+import { Effect } from "effect"
 
-const program = yargs(hideBin(process.argv))
-  .command(greetCommand)
-  .command(rollCommand)
-  .command(lifeCommand);
+const program = Command.make("cli").pipe(Command.withSubcommands([
+  lifeCommand,
+]));
 
-const run = async () => {
-  await db.migrate.latest();
-  await program.parseAsync();
-};
+const cli = Command.run(program, { name: "Clean Arch Kata CLI", version: "0.0.1" });
 
-run()
-  .catch((e) => {
-    console.error(e);
-    process.exit(1);
-  })
-  .finally(() => db.destroy());
+cli(process.argv).pipe(Effect.provide(NodeContext.layer), NodeRuntime.runMain)

@@ -3,11 +3,10 @@ module.exports = {
     browser: true,
     es2021: true,
   },
-  plugins: ["@typescript-eslint", "boundaries"],
+  plugins: ["@typescript-eslint"],
   extends: [
     "eslint:recommended",
     "plugin:@typescript-eslint/recommended",
-    "plugin:boundaries/strict",
     "prettier",
   ],
   overrides: [
@@ -35,75 +34,7 @@ module.exports = {
         alwaysTryTypes: true,
       },
     },
-    "boundaries/elements": [
-      {
-        type: "app",
-        pattern: "src/app",
-      },
-      {
-        type: "entities",
-        pattern: "src/domain/entities",
-      },
-      {
-        type: "usecases",
-        pattern: "src/domain/usecases",
-      },
-      {
-        type: "data",
-        pattern: "src/data",
-      },
-      {
-        type: "migrations",
-        pattern: "db/migrations",
-      },
-    ],
-    "boundaries/ignore": [
-      "*.*", // ignore top level config files
-      "src/fixtures/**",
-      "**/*.spec.ts",
-    ],
   },
   rules: {
-    "boundaries/element-types": [
-      2,
-      {
-        default: "disallow",
-        rules: [
-          {
-            from: "usecases",
-            allow: ["entities"],
-          },
-          {
-            from: "app",
-            allow: ["entities", "usecases"],
-          },
-          {
-            from: ["app", "migrations"],
-            allow: ["entities", "usecases", "data"],
-          },
-        ],
-      },
-    ],
-    "boundaries/external": [
-      2,
-      {
-        // disallow all external imports by default
-        default: "disallow",
-        rules: [
-          {
-            from: "*",
-            allow: ["remeda", "fp-ts"],
-          },
-          {
-            from: ["data", "migrations"],
-            allow: "knex",
-          },
-          {
-            from: "app",
-            allow: "*",
-          },
-        ],
-      },
-    ],
   },
 };

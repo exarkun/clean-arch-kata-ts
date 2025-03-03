@@ -1,3 +1,7 @@
+import { Command, Options } from "@effect/cli";
+import { p } from "@effect/cli/HelpDoc";
+import * as Spans from "@effect/cli/HelpDoc/Span";
+import { invalidValue } from "@effect/cli/ValidationError";
 import { Effect, flow, Option, pipe } from "effect";
 import {
   backends,
@@ -11,28 +15,28 @@ import {
   Point,
   randomBoard,
 } from "./domain";
+import { finally_, iterateEffect, randomEffect } from "./utils";
 import {
   BorderDecorations,
   decorations,
   simpleRectangleConsolePresenter,
 } from "./view";
-import { finally_, iterateEffect, randomEffect } from "./utils";
-import { Command, Options } from "@effect/cli";
-import { invalidValue } from "@effect/cli/ValidationError";
-import * as Spans from "@effect/cli/HelpDoc/Span";
-import { p } from "@effect/cli/HelpDoc";
 
 const withMinimum = (n: number) => (o: Options.Options<number>) =>
   pipe(
     o,
     Options.map((m: number) => {
       if (m < n) {
-        // From https://github.com/Effect-TS/effect/blob/main/packages/cli/src/internal/primitive.ts#L417 
-        // it looks like Effect.orElseFail might be the right way to produce parse errors.  This way 
+        // From https://github.com/Effect-TS/effect/blob/main/packages/cli/src/internal/primitive.ts#L417
+        // it looks like Effect.orElseFail might be the right way to produce parse errors.  This way
         // produces extremely ugly errors.
-        throw invalidValue(p(Spans.error(
-          `${Options.getIdentifier(o)}: ${m} is less than the minimum allowed value ${n}`,
-        )));
+        throw invalidValue(
+          p(
+            Spans.error(
+              `${Options.getIdentifier(o)}: ${m} is less than the minimum allowed value ${n}`,
+            ),
+          ),
+        );
       } else {
         return m;
       }
@@ -106,6 +110,12 @@ const style = Options.choiceWithValue(
   Options.withAlias("S"),
   Options.withDescription("choose the style of border decorations"),
 );
+const animate = Options.boolean("no-animate").pipe(
+  Options.withDefault(false),
+  Options.withAlias("A"),
+  Options.withDescription("don't animate state updates"),
+  Options.map((b) => !b),
+);
 
 const lifeOptions = {
   width,
@@ -117,6 +127,7 @@ const lifeOptions = {
   backend,
   pattern,
   style,
+  animate,
 };
 
 type LifeOptions = {
@@ -129,6 +140,7 @@ type LifeOptions = {
   prng: Option.Option<Effect.Effect<number, never, never>>;
   pattern: Option.Option<readonly Point[]>;
   style: BorderDecorations;
+  animate: boolean;
 };
 
 const lifeImpl = ({
@@ -141,10 +153,16 @@ const lifeImpl = ({
   prng,
   pattern,
   style,
+  animate,
 }: LifeOptions) => {
   const boardEff = makeBoard(width, height, cellCount, prng, pattern);
   const advance = pickBackend(backend, width, height)(conwayRules);
-  const present = simpleRectangleConsolePresenter(width, height, style);
+  const present = simpleRectangleConsolePresenter(
+    width,
+    height,
+    style,
+    animate,
+  );
   const simulate = simulationStep(advance, present.present);
   const delayedSimulate = flow(
     simulate,

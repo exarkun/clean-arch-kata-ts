@@ -39,22 +39,34 @@ export const simpleRectangleConsolePresenter = (
   width: number,
   height: number,
   decorations: BorderDecorations,
+  animate: boolean,
 ): Present<Iterated<Board>> => {
   const toString = boardToString(width, height, decorations);
-  return {
-    setup: Effect.sync(() => {
-      ANSITerminal.clear();
-      ANSITerminal.hideCursor();
-    }),
+  const basic = {
+    setup: Effect.succeed(null),
     present: (board: Iterated<Board>) =>
-      Effect.sync(() => {
-        ANSITerminal.home();
-        ANSITerminal.write(toString(board));
-      }),
-    cleanup: Effect.sync(() => {
-      ANSITerminal.showCursor();
-    }),
+      Effect.sync(() => ANSITerminal.write(toString(board))),
+    cleanup: Effect.succeed(null),
   };
+  if (animate) {
+    return {
+      setup: Effect.sync(() => {
+        ANSITerminal.clear();
+        ANSITerminal.hideCursor();
+        return basic.setup;
+      }),
+      present: (board: Iterated<Board>) => {
+        ANSITerminal.home();
+        return basic.present(board);
+      },
+      cleanup: Effect.sync(() => {
+        ANSITerminal.showCursor();
+        return basic.cleanup;
+      }),
+    };
+  } else {
+    return basic;
+  }
 };
 
 const ANSITerminal = {

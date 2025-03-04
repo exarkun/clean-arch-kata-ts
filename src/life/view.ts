@@ -3,14 +3,12 @@ import { Board, CellState, Iterated } from "./domain";
 import { match } from "ts-pattern";
 import { compose } from "effect/Function";
 import * as Writer from "fp-ts/Writer";
-import * as String from "fp-ts/string";
 import * as ReadonlyArray from "fp-ts/ReadonlyArray";
 import { range } from "effect/Array";
-import { identity, pipe } from "fp-ts/lib/function";
-import { Kind2, URItoKind2 } from "fp-ts/HKT";
-import { Monad2C } from "fp-ts/lib/Monad";
+import { pipe } from "fp-ts/lib/function";
 import { replicate } from "./utils";
 
+import { StringArrayWriter as SAW } from "../utils";
 import { ANSITerminal } from "src/animation/view";
 /**
  * Denote an Effect which presents the given board state.
@@ -142,12 +140,12 @@ const boardToString = (
     pipe(
       [
         makeTopBorder(`Generation ${iteration.toString().padStart(5)}`),
-        pipe(ys, traverse(renderForWidth(value)), voidW),
+        pipe(ys, SAW.traverse(renderForWidth(value)), SAW.void),
         bottomBorder,
       ],
-      sequence,
+      SAW.sequence,
       Writer.execute,
-      fold,
+      SAW.fold,
     );
 };
 
@@ -174,12 +172,3 @@ const renderRowString = (
   };
 };
 
-const StringArrayWriterM = Writer.getMonad(ReadonlyArray.getMonoid<string>());
-const traverse = ReadonlyArray.traverse(StringArrayWriterM);
-const sequence = ReadonlyArray.sequence(StringArrayWriterM);
-const fold = ReadonlyArray.foldMap(String.Monoid)<string>(identity);
-const void_ =
-  <F extends keyof URItoKind2<E, A>, E, A>(f: Monad2C<F, E>) =>
-  (fa: Kind2<F, E, A>): Kind2<F, E, void> =>
-    f.map(fa, () => undefined);
-const voidW = void_(StringArrayWriterM);

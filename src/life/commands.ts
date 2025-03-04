@@ -12,7 +12,6 @@ import {
   makePatternBoard,
   patterns,
   pickBackend,
-  Point,
   randomBoard,
 } from "./domain";
 import { finally_, iterateEffect, randomEffect } from "./utils";
@@ -21,6 +20,7 @@ import {
   decorations,
   simpleRectangleConsolePresenter,
 } from "./view";
+import { Point } from "src/cartesian/domain";
 
 const withMinimum = (n: number) => (o: Options.Options<number>) =>
   pipe(

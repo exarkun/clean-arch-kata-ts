@@ -3,6 +3,7 @@ import { unfold, cartesian, map, range, reduce, take } from "effect/Array";
 import { match } from "ts-pattern";
 import { shuffle } from "./utils";
 import { pipe } from "fp-ts/lib/function";
+import { addPoint, eqPoint, Point, Region } from "../cartesian/domain";
 
 /**
  * Denote the status of a single cell.
@@ -11,29 +12,6 @@ export enum CellState {
   Living = "living",
   Dead = "dead",
 }
-
-/**
- * Denote the position of a cell.
- */
-export type Point = { x: number; y: number };
-
-export const eqPoint = Struct.getEquivalence({
-  x: Number.Equivalence,
-  y: Number.Equivalence,
-});
-
-/**
- * Denote vector addition in (N, N).
- */
-export const addPoint = (p1: Point, p2: Point) => ({
-  x: p1.x + p2.x,
-  y: p1.y + p2.y,
-});
-
-/**
- * Denote a subset of the cartesian plane.
- */
-export type Region = (p: Point) => boolean;
 
 /**
  * Denote the status of a rectangular grid of cells.
@@ -96,15 +74,6 @@ export const move = (d: Direction, p: Point) =>
       .with(Direction.Northwest, () => ({ x: -1, y: -1 }))
       .exhaustive(),
   );
-
-/**
- * Define a rectangular Region of finite extent anchored at the origin.
- */
-export const rectangle = (width: number, height: number): Region => {
-  return ({ x, y }: Point) => {
-    return x >= 0 && x < width && y >= 0 && y < height;
-  };
-};
 
 /**
  * Define a Board for which all cells outside of the given region are always

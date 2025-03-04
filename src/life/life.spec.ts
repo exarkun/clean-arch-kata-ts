@@ -1,5 +1,5 @@
 import { describe, expect, it } from "@jest/globals";
-import { initialBoard, randomBoard, } from "./commands";
+import { initialBoard, randomBoard } from "./domain";
 import { CellState } from "./domain";
 import seedrandom from "seedrandom";
 import { range } from "effect/Array";

@@ -1,8 +1,11 @@
 import { describe, expect, it } from "@jest/globals";
 import { getGreeting } from "./domain";
+import { Option } from "effect";
 
-describe("getGreet", () => {
+describe("getGreeting", () => {
   it("returns a greeting", () => {
-    expect(getGreeting({ name: "World" })).toEqual("Hello, World!");
+    expect(getGreeting(Option.none())({ name: "World" })).toEqual(
+      "Hello, World!",
+    );
   });
 });

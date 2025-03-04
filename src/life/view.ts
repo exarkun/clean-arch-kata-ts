@@ -11,6 +11,7 @@ import { Kind2, URItoKind2 } from "fp-ts/HKT";
 import { Monad2C } from "fp-ts/lib/Monad";
 import { replicate } from "./utils";
 
+import { ANSITerminal } from "src/animation/view";
 /**
  * Denote an Effect which presents the given board state.
  */
@@ -67,14 +68,6 @@ export const simpleRectangleConsolePresenter = (
   } else {
     return basic;
   }
-};
-
-const ANSITerminal = {
-  clear: () => process.stdout.write("\x1B[2J"),
-  home: () => process.stdout.write("\x1B[H"),
-  write: (s: string) => process.stdout.write(s),
-  showCursor: () => process.stdout.write("\x1b[?25h"),
-  hideCursor: () => process.stdout.write("\x1b[?25l"),
 };
 
 const formatCell = (cell: CellState): string =>

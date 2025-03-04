@@ -2,25 +2,28 @@ import { Command, Options } from "@effect/cli";
 import { p } from "@effect/cli/HelpDoc";
 import * as Spans from "@effect/cli/HelpDoc/Span";
 import { invalidValue } from "@effect/cli/ValidationError";
-import { Effect, flow, Option, pipe } from "effect";
+import { Point } from "cartesian/domain";
+import { Effect, Option, pipe, Stream } from "effect";
+import { iteratedApplicative, liftIterated } from "../iterated";
 import {
   backends,
   Board,
   conwayRules,
+  emptyBoard,
   initialBoard,
-  Iterated,
   makePatternBoard,
   patterns,
   pickBackend,
   randomBoard,
 } from "./domain";
-import { finally_, iterateEffect, randomEffect } from "./utils";
+import { finally_, randomEffect } from "./utils";
 import {
   BorderDecorations,
+  borderImage,
   decorations,
-  simpleRectangleConsolePresenter,
+  makeAnimator,
+  makeStatic,
 } from "./view";
-import { Point } from "src/cartesian/domain";
 
 const withMinimum = (n: number) => (o: Options.Options<number>) =>
   pipe(
@@ -44,15 +47,14 @@ const withMinimum = (n: number) => (o: Options.Options<number>) =>
   );
 
 const width = Options.integer("width").pipe(
-  // The adjustment here comes from knowledge of how the renderer works, which of course doesn't belong here.
-  Options.withDefault(process.stdout.columns / 2 - 2),
+  // We suppose that the aspect ratio of the terminal is 2:1 (height:width).
+  Options.withDefault(process.stdout.columns / 2),
   withMinimum(1),
   Options.withAlias("w"),
   Options.withDescription("the size of the board on the x axis"),
 );
 const height = Options.integer("height").pipe(
-  // See comment on width about the adjustment to the rows value.
-  Options.withDefault(process.stdout.rows - 3),
+  Options.withDefault(process.stdout.rows),
   withMinimum(1),
   Options.withAlias("h"),
   Options.withDescription("the size of the board on the y axis"),
@@ -139,7 +141,7 @@ type LifeOptions = {
   backend: string;
   prng: Option.Option<Effect.Effect<number, never, never>>;
   pattern: Option.Option<readonly Point[]>;
-  style: BorderDecorations;
+  style: BorderDecorations<string>;
   animate: boolean;
 };
 
@@ -154,46 +156,38 @@ const lifeImpl = ({
   pattern,
   style,
   animate,
-}: LifeOptions) => {
+}: LifeOptions): Effect.Effect<void, Error, never> => {
   const boardEff = makeBoard(width, height, cellCount, prng, pattern);
   const advance = pickBackend(backend, width, height)(conwayRules);
-  const present = simpleRectangleConsolePresenter(
+
+  const border = borderImage(width, height, style);
+  const renderer = (animate ? makeAnimator : makeStatic)(
     width,
     height,
-    style,
-    animate,
+    () => border,
+    delay,
   );
-  const simulate = simulationStep(advance, present.present);
-  const delayedSimulate = flow(
-    simulate,
-    Effect.tap(() => Effect.sleep(delay)),
-  );
+
   return pipe(
-    present.setup,
+    renderer.setup,
     Effect.andThen(() => boardEff),
-    Effect.flatMap((b) =>
-      iterateEffect(delayedSimulate, { iteration: 0, value: b }, maxTurns),
+    Effect.map(iteratedApplicative.of<Board>),
+    Effect.map((b) => Stream.iterate(b, liftIterated(advance))),
+    Effect.map(Stream.take(maxTurns)),
+    Effect.flatMap(
+      Stream.runFoldEffect(
+        iteratedApplicative.of(emptyBoard),
+        renderer.step<Error, never>,
+      ),
     ),
-    finally_(present.cleanup),
+    Effect.andThen(undefined),
+    finally_(renderer.cleanup),
   );
 };
 
 export const lifeCommand = Command.make("life", lifeOptions, lifeImpl).pipe(
   Command.withDescription("Simulate the game of life"),
 );
-
-const simulationStep = (
-  advance: (b: Board) => Board,
-  present: (b: Iterated<Board>) => Effect.Effect<void, Error, never>,
-) =>
-  flow(
-    Effect.succeed<Iterated<Board>>,
-    Effect.tap(present),
-    Effect.map(({ iteration, value }) => ({
-      iteration: iteration + 1,
-      value: advance(value),
-    })),
-  );
 
 const makeBoard = (
   width: number,

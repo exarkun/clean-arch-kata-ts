@@ -1,10 +1,9 @@
-import { Effect, flow } from "effect";
+import { Array, Effect, flow } from "effect";
+import { isLeft } from "effect/Either";
 import { pipe } from "fp-ts/lib/function";
 import { range } from "fp-ts/lib/NonEmptyArray";
-import { Array } from "effect";
-import * as ReadonlyArray from "fp-ts/lib/ReadonlyArray";
 import * as Ord from "fp-ts/lib/Ord";
-import { isLeft } from "effect/Either";
+import * as ReadonlyArray from "fp-ts/lib/ReadonlyArray";
 import seedrandom from "seedrandom";
 
 /**
@@ -12,10 +11,10 @@ import seedrandom from "seedrandom";
  * time it is evaluated.
  */
 export const randomEffect = (seed: string) => {
-    const prng = seedrandom(seed);
-    return Effect.sync(prng);
-  };
-  
+  const prng = seedrandom(seed);
+  return Effect.sync(prng);
+};
+
 /**
  * Re-arrange the elements of an array based on the output of a PRNG.
  */
@@ -38,23 +37,12 @@ export const replicate = (s: string, n: number): string =>
   n <= 0 ? "" : s + replicate(s, n - 1);
 
 export const finally_ =
-  (handler: Effect.Effect<void, Error, never>) =>
-  <R, C>(program: Effect.Effect<R, Error, C>): Effect.Effect<R, Error, C> =>
+  <C, E1>(handler: Effect.Effect<void, E1, C>) =>
+  <R, E2>(program: Effect.Effect<R, E2, C>): Effect.Effect<R, E1 | E2, C> =>
     pipe(
       program,
       Effect.either,
-      Effect.andThen((result) =>
-        pipe(
-          handler,
-          Effect.andThen(() => {
-            if (isLeft(result)) {
-              throw result.left;
-            } else {
-              return result;
-            }
-          }),
-        ),
-      ),
+      Effect.andThen((result) => pipe(handler, Effect.andThen(result))),
     );
 
 /**

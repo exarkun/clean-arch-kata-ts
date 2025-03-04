@@ -1,10 +1,11 @@
 import { describe, expect, it } from "@jest/globals";
-import { initialBoard, randomBoard } from "./domain";
-import { CellState } from "./domain";
-import seedrandom from "seedrandom";
-import { range } from "effect/Array";
+import { Point } from "cartesian/domain";
 import { Effect } from "effect";
+import { range } from "effect/Array";
+import seedrandom from "seedrandom";
+import { CellState, initialBoard, randomBoard } from "./domain";
 import { shuffle } from "./utils";
+import { boardToImage, formatLiving } from "./view";
 
 describe("The Game of Life", () => {
   const prng = seedrandom("x");
@@ -48,6 +49,27 @@ describe("The Game of Life", () => {
       expect(board({ x: 0, y: 1 })).toEqual(CellState.Living);
       expect(board({ x: 1, y: 0 })).toEqual(CellState.Dead);
       expect(board({ x: 0, y: 1 })).toEqual(CellState.Living);
+    });
+  });
+  describe("view", () => {
+    describe("formatLiving", () => {
+      it("renders dead cells as ' '", () => {
+        expect(formatLiving(CellState.Dead)).toStrictEqual(" ");
+      });
+      it("renders living cells as ●", () => {
+        expect(formatLiving(CellState.Living)).toStrictEqual("●");
+      });
+    });
+    describe("boardToImage", () => {
+      it("renders individual positions based on the formatter and board given", () => {
+        const image = boardToImage(
+          (n: number) => n.toString(),
+          ({ x, y }: Point) => x + y,
+        );
+        expect(image({ x: 0, y: 0 })).toStrictEqual("0");
+        expect(image({ x: 1, y: 0 })).toStrictEqual("1");
+        expect(image({ x: 1, y: 1 })).toStrictEqual("2");
+      });
     });
   });
 });

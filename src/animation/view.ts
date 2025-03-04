@@ -1,13 +1,17 @@
-import * as Writer from "fp-ts/Writer";
 import { Effect, pipe } from "effect";
-import * as ReadonlyArray from "fp-ts/ReadonlyArray";
-import { Rectangle } from "src/cartesian/domain";
-import { Animation, Image } from "./domain";
 import { range } from "effect/Array";
+import * as ReadonlyArray from "fp-ts/ReadonlyArray";
+import * as Writer from "fp-ts/Writer";
+import { Rectangle } from "cartesian/domain";
 import { StringArrayWriter as SAW } from "../utils";
+import { Animation, Image } from "./domain";
 
 type Seconds = number;
 
+/**
+ * Create an Effect that executes the given animation over the given duration
+ * and completes when the animation completes.
+ */
 export const present = (
   animationBoundingBox: Rectangle,
   a: Animation<Image<string>>,
@@ -30,15 +34,17 @@ export const presentFromTime = (
   ANSITerminal.write(renderToLines(image, animationBoundingBox).join("\n"));
 
   // Compute time to next frame
-  const ms = 1_000 * (nextChange * duration - elapsed);
+  const ms = nextChange * duration;
+
+  // process.stdout.write(`${JSON.stringify({elapsed, duration, nextChange, p, ms})}\n`)
 
   return pipe(
     // Sleep
     Effect.sleep(ms),
-    Effect.andThen(
+    Effect.flatMap(() =>
       nextChange < 1
         ? // If not yet done, recurse
-          presentFromTime(animationBoundingBox, a, duration, nextChange)
+          presentFromTime(animationBoundingBox, a, duration, ms)
         : // Else, complete
           Effect.succeed(undefined),
     ),

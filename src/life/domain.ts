@@ -1,9 +1,9 @@
-import { Option, Effect, Number, Struct } from "effect";
-import { unfold, cartesian, map, range, reduce, take } from "effect/Array";
-import { match } from "ts-pattern";
-import { shuffle } from "./utils";
+import { Effect, Option } from "effect";
+import { cartesian, map, range, reduce, take, unfold } from "effect/Array";
 import { pipe } from "fp-ts/lib/function";
-import { addPoint, eqPoint, Point, Region } from "../cartesian/domain";
+import { match } from "ts-pattern";
+import { addPoint, eqPoint, Point, Region } from "@/cartesian/domain";
+import { shuffle } from "./utils";
 
 /**
  * Denote the status of a single cell.
@@ -19,6 +19,14 @@ export enum CellState {
 export type Board = (p: Point) => CellState;
 
 /**
+ * Define a Board with a constant value at all coordinates.
+ */
+export const constantBoard =
+  (c: CellState): Board =>
+  (/*p: Point*/) =>
+    c;
+
+/**
  * Define a new Board like another board but on which the cell at a given
  * coordinate is alive.
  */
@@ -30,7 +38,7 @@ export const birth =
 /**
  * Define a Board with only dead cells.
  */
-export const emptyBoard: Board = () => CellState.Dead;
+export const emptyBoard: Board = constantBoard(CellState.Dead);
 
 /**
  * Denote each possible direction in which a cell can have a neighbor.
@@ -90,23 +98,65 @@ export const bounded = (included: Region, board: Board): Board => {
 };
 
 /**
+ * Denote the difference between two cell states.
+ */
+export enum CellDifference {
+  Birth = "Birth",
+  Death = "Death",
+  NoChange = "NoChange",
+}
+
+/**
+ * Compute the state that results from applying a difference to a state.
+ */
+const updateCell = (
+  state: CellState,
+  change: Option.Option<CellDifference>,
+): CellState =>
+  Option.isNone(change)
+    ? state
+    : change.value === CellDifference.Birth
+      ? CellState.Living
+      : CellState.Dead;
+
+/**
+ * Compute the difference between two cell states.
+ */
+export const subtractState = (a: CellState, b: CellState): CellDifference =>
+  match([a, b])
+    .with([CellState.Dead, CellState.Living], () => CellDifference.Death)
+    .with([CellState.Living, CellState.Dead], () => CellDifference.Birth)
+    .otherwise(() => CellDifference.NoChange);
+
+/**
+ * Compute the difference between two boards.
+ */
+export const subtractBoard =
+  (a: Board, b: Board): ((p: Point) => CellDifference) =>
+  (p: Point) =>
+    subtractState(a(p), b(p));
+
+/**
  * Denote a rule for how the state of a single cell changes, given the state
  * of its neighbors.
  */
 export type StateChangeRule = (
   state: CellState,
   allLivingNeighbors: Set<Direction>,
-) => CellState;
+) => Option.Option<CellDifference>;
 
 /**
  * Define the standard rules of Conway's Game of Life.
  */
 export const conwayRules: StateChangeRule = (state, allLivingNeighbors) =>
   match([state, allLivingNeighbors.size])
-    .with([CellState.Dead, 3], () => CellState.Living)
-    .with([CellState.Living, 2], () => CellState.Living)
-    .with([CellState.Living, 3], () => CellState.Living)
-    .otherwise(() => CellState.Dead);
+    .with([CellState.Dead, 3], () => Option.some(CellDifference.Birth))
+    .with([CellState.Living, 0], () => Option.some(CellDifference.Death))
+    .with([CellState.Living, 1], () => Option.some(CellDifference.Death))
+    .with([CellState.Living, 4], () => Option.some(CellDifference.Death))
+    .with([CellState.Living, 5], () => Option.some(CellDifference.Death))
+    .with([CellState.Living, 6], () => Option.some(CellDifference.Death))
+    .otherwise(Option.none);
 
 /**
  * Define the Board recursively in terms of all earlier Boards.
@@ -118,7 +168,8 @@ export const recursiveAdvance =
       const neighbors = allDirections.map((d) => ({ d, p: move(d, p) }));
       const living = neighbors.filter(({ p }) => board(p) === CellState.Living);
       const aliveInDirection = living.map(({ d }) => d);
-      return rule(board(p), new Set(aliveInDirection));
+      const state = board(p);
+      return updateCell(state, rule(state, new Set(aliveInDirection)));
     };
   };
 
@@ -224,11 +275,3 @@ export const pickBackend = (name: string, width: number, height: number) =>
     .otherwise(() => {
       throw new Error("zoops");
     });
-
-/**
- * Denote a value which is computed through a number of iterations.
- */
-export type Iterated<A> = {
-  iteration: number;
-  value: A;
-};

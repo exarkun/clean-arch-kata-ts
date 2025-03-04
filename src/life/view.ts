@@ -1,174 +1,243 @@
+import {
+  fromFrames,
+  Image,
+  imageFromText,
+  overlay,
+  translate,
+} from "@/animation/domain";
+import { ANSITerminal, present } from "@/animation/view";
+import { Point } from "@/cartesian/domain";
 import { Effect } from "effect";
-import { Board, CellState, Iterated } from "./domain";
-import { match } from "ts-pattern";
 import { compose } from "effect/Function";
-import * as Writer from "fp-ts/Writer";
-import * as ReadonlyArray from "fp-ts/ReadonlyArray";
-import { range } from "effect/Array";
 import { pipe } from "fp-ts/lib/function";
-import { replicate } from "./utils";
+import { match } from "ts-pattern";
+import { Iterated } from "../iterated";
+import { Board, CellDifference, CellState, subtractBoard } from "./domain";
 
-import { StringArrayWriter as SAW } from "../utils";
-import { ANSITerminal } from "src/animation/view";
+/**
+ * Give the ratio of size of rows to columns of the display so we can
+ * make sure that a square board is presented as visually square.
+ */
+const aspectRatio = 2;
+
+/**
+ * Correct an image for the aspect ratio of text common on most terminals.
+ *
+ * This differs from `scale` in that text (on a terminal) is not *easily* scalable
+ * so we make the correction by inserting a fill character instead of resizing any
+ * individual image elements.
+ *
+ * Note only integer aspect ratios are actually supported.
+ */
+const stretch =
+  (aspectRatio: number) =>
+  (fill: string) =>
+  (b: Image<string>): Image<string> =>
+  ({ x, y }: Point) =>
+    Math.floor(x) % aspectRatio === 0 ? b({ x: x / aspectRatio, y }) : fill;
+
+/**
+ * Correct an image for the expected aspect ratio using space as the fill
+ * character.
+ */
+const fixAspectRatio = stretch(aspectRatio)(" ");
+
+/**
+ * Make a rectangular bounding box, accounting for the aspect ratio, with
+ * its top-left corner at the origin.
+ */
+const rectangle = ({
+  aspectRatio,
+  width,
+  height,
+}: {
+  aspectRatio: number;
+  width: number;
+  height: number;
+}) => ({
+  topLeft: { x: 0, y: 0 },
+  bottomRight: { x: width * aspectRatio, y: height },
+});
+
 /**
  * Denote an Effect which presents the given board state.
  */
-export type Present<A> = {
+export type Animator<A> = {
   setup: Effect.Effect<void, Error, never>;
-  present: (value: A) => Effect.Effect<void, Error, never>;
+  step: <E, C>(
+    prev: Iterated<A>,
+    next: Iterated<A>,
+  ) => Effect.Effect<Iterated<A>, E, C>;
   cleanup: Effect.Effect<void, Error, never>;
 };
+
+export const managedTerminal = <T>(a: Animator<T>): Animator<T> => ({
+  setup: Effect.sync(() => {
+    ANSITerminal.clear();
+    ANSITerminal.hideCursor();
+  }),
+  cleanup: Effect.sync(() => {
+    ANSITerminal.showCursor();
+  }),
+  step: a.step,
+});
+
+export const makeStatic = (
+  width: number,
+  height: number,
+  makeOverlay: (iteration: number) => Image<string>,
+  timePerGeneration: number,
+): Animator<Board> => {
+  const boundingBox = rectangle({ aspectRatio, width, height });
+  return managedTerminal({
+    setup: Effect.succeed(null),
+    cleanup: Effect.succeed(null),
+    step: (_: Iterated<Board>, next: Iterated<Board>) => {
+      const img = fromFrames([
+        [0, fixAspectRatio(boardToImage(formatLiving, next.value))],
+      ]);
+      return pipe(
+        present(boundingBox, img, timePerGeneration),
+        Effect.andThen(next),
+      );
+    },
+  });
+};
+
+export const makeAnimator = (
+  width: number,
+  height: number,
+  // TODO: Animator should be a Functor?  Or perhaps Animation?
+  // To overlay something, you should fmap flip(over)(something)...
+  // For now, manual.
+  makeOverlay: (iteration: number) => Image<string>,
+  timePerGeneration: number,
+): Animator<Board> => {
+  const boundingBox = rectangle({ aspectRatio, width, height });
+  return managedTerminal({
+    setup: Effect.succeed(null),
+    cleanup: Effect.succeed(null),
+    step: <E, C>(
+      prev: Iterated<Board>,
+      next: Iterated<Board>,
+    ): Effect.Effect<Iterated<Board>, E, C> => {
+      const deaths = subtractBoard(next.value, prev.value);
+      const label = translate({ x: 10, y: 0 })(
+        imageFromText(`Generation ${next.iteration.toString().padStart(5)}`),
+      );
+      const overlay = over(makeOverlay(next.iteration))(label);
+      const prevImage = fixAspectRatio(boardToImage(formatLiving, prev.value));
+      const deathImage = fixAspectRatio(boardToImage(formatDeath, deaths));
+      const nextImage = fixAspectRatio(boardToImage(formatLiving, next.value));
+      const transitionImage = over(deathImage)(nextImage);
+      const animation = fromFrames([
+        [0.0, over(prevImage)(overlay)],
+        [0.5, over(transitionImage)(overlay)],
+      ]);
+      return pipe(
+        present(boundingBox, animation, timePerGeneration),
+        Effect.map(() => next),
+      );
+    },
+  });
+};
+
+const transparentSpace = (bottom: string, top: string) =>
+  top === " " ? bottom : top;
+const over = overlay(transparentSpace);
+
+export const boardToImage = <T>(
+  formatter: (t: T) => string,
+  board: (p: Point) => T,
+): Image<string> => compose(board, formatter);
 
 /**
  * Represent the visual presentation of an outer rectangular border.
  */
-export type BorderDecorations = {
-  horizontal: string;
-  vertical: string;
-  topLeftCorner: string;
-  topRightCorner: string;
-  bottomLeftCorner: string;
-  bottomRightCorner: string;
+export type BorderDecorations<T> = {
+  horizontal: T;
+  vertical: T;
+  topLeftCorner: T;
+  topRightCorner: T;
+  bottomLeftCorner: T;
+  bottomRightCorner: T;
+  nothing: T;
 };
 
 /**
- * Create a rectangular Board Presenter with the given dimensions and decorations.
+ * Make a pretty rectangular border.
+ *
+ * For maximum image fidelity, this internally accounts for the aspect ratio
+ * rather than requiring it be transformed afterwards.  This is something of
+ * an abstraction violation.  How could it be better?
  */
-export const simpleRectangleConsolePresenter = (
-  width: number,
-  height: number,
-  decorations: BorderDecorations,
-  animate: boolean,
-): Present<Iterated<Board>> => {
-  const toString = boardToString(width, height, decorations);
-  const basic = {
-    setup: Effect.succeed(null),
-    present: (board: Iterated<Board>) =>
-      Effect.sync(() => ANSITerminal.write(toString(board))),
-    cleanup: Effect.succeed(null),
-  };
-  if (animate) {
-    return {
-      setup: Effect.sync(() => {
-        ANSITerminal.clear();
-        ANSITerminal.hideCursor();
-        return basic.setup;
-      }),
-      present: (board: Iterated<Board>) => {
-        ANSITerminal.home();
-        return basic.present(board);
-      },
-      cleanup: Effect.sync(() => {
-        ANSITerminal.showCursor();
-        return basic.cleanup;
-      }),
-    };
-  } else {
-    return basic;
-  }
-};
+export const borderImage =
+  <T>(
+    width: number,
+    height: number,
+    decorations: BorderDecorations<T>,
+  ): Image<T> =>
+  ({ x, y }: Point) => {
+    type X = "Left" | "Center" | "Right";
+    type Y = "Top" | "Center" | "Bottom";
 
-const formatCell = (cell: CellState): string =>
+    const classify = <T>(
+      limit: number,
+      low: T,
+      center: T,
+      high: T,
+      a: number,
+    ): T => {
+      if (Math.floor(a) === 0) {
+        return low;
+      } else if (Math.floor(a) === limit - 1) {
+        return high;
+      } else {
+        return center;
+      }
+    };
+    const cx = classify<X>(width * aspectRatio, "Left", "Center", "Right", x);
+    const cy = classify<Y>(height, "Top", "Center", "Bottom", y);
+    return match([cx, cy])
+      .with(["Left", "Top"], () => decorations.topLeftCorner)
+      .with(["Left", "Center"], () => decorations.vertical)
+      .with(["Left", "Bottom"], () => decorations.bottomLeftCorner)
+      .with(["Center", "Top"], () => decorations.horizontal)
+      .with(["Center", "Center"], () => decorations.nothing)
+      .with(["Center", "Bottom"], () => decorations.horizontal)
+      .with(["Right", "Top"], () => decorations.topRightCorner)
+      .with(["Right", "Center"], () => decorations.vertical)
+      .with(["Right", "Bottom"], () => decorations.bottomRightCorner)
+      .exhaustive();
+  };
+
+export const formatLiving = (cell: CellState): string =>
   match(cell)
-    .with(CellState.Dead, () => "  ")
-    .with(CellState.Living, () => "● ")
-    .exhaustive();
+    .with(CellState.Living, () => "●")
+    .otherwise(() => " ");
+
+export const formatDeath = (d: CellDifference) =>
+  match(d)
+    .with(CellDifference.Death, () => "◌")
+    .otherwise(() => " ");
 
 export const decorations = {
   simple: {
-    horizontal: "--",
+    horizontal: "-",
     vertical: "|",
     topLeftCorner: "/",
     topRightCorner: "\\",
     bottomLeftCorner: "\\",
     bottomRightCorner: "/",
+    nothing: " ",
   },
   fancy: {
-    horizontal: "──",
+    horizontal: "─",
     vertical: "│",
     topLeftCorner: "╭",
     topRightCorner: "╮",
     bottomLeftCorner: "╰",
     bottomRightCorner: "╯",
+    nothing: " ",
   },
 };
-
-/**
- * Define a rendering of a Board to a string.
- *
- * Only the part of the board that falls within (0,0) - (width - 1,height - 1) will be rendered.
- */
-const boardToString = (
-  width: number,
-  height: number,
-  {
-    horizontal,
-    vertical,
-    topLeftCorner,
-    topRightCorner,
-    bottomLeftCorner,
-    bottomRightCorner,
-  }: BorderDecorations,
-) => {
-  const nextLine = "\n";
-  const makeTopBorder = (label: string) => {
-    const fillSize = (width - 2 - label.length / 2) / 2;
-    const prefix = replicate(horizontal, Math.floor(fillSize));
-    const suffix = replicate(horizontal, Math.ceil(fillSize));
-    return Writer.tell([
-      topLeftCorner,
-      prefix,
-      "┤ ",
-      label,
-      " ├",
-      suffix,
-      topRightCorner,
-    ]);
-  };
-  const bottomBorder = Writer.tell([
-    nextLine,
-    bottomLeftCorner,
-    replicate(horizontal, width),
-    bottomRightCorner,
-    nextLine,
-  ]);
-  const sideBorder = vertical;
-  const renderForWidth = renderRowString(nextLine, sideBorder, width);
-  const ys = range(0, height - 1);
-
-  return ({ iteration, value }: Iterated<Board>): string =>
-    pipe(
-      [
-        makeTopBorder(`Generation ${iteration.toString().padStart(5)}`),
-        pipe(ys, SAW.traverse(renderForWidth(value)), SAW.void),
-        bottomBorder,
-      ],
-      SAW.sequence,
-      Writer.execute,
-      SAW.fold,
-    );
-};
-
-/**
- * Render one row of a Board as a string.
- *
- * Only cells that fall within (0, width - 1) will be rendered.
- */
-const renderRowString = (
-  nextLine: string,
-  sideBorder: string,
-  width: number,
-) => {
-  const xs = range(0, width - 1);
-  return (board: Board) => {
-    const getState = compose(formatCell)(board);
-    return (y: number): Writer.Writer<readonly string[], void> =>
-      Writer.tell([
-        nextLine,
-        sideBorder,
-        ...ReadonlyArray.map((x: number) => getState({ x, y }))(xs),
-        sideBorder,
-      ]);
-  };
-};
-

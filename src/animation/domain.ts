@@ -2,10 +2,10 @@
  * Text-based animations.
  */
 
-import { ReadonlyNonEmptyArray } from "fp-ts/lib/ReadonlyNonEmptyArray";
-import * as ReadonlyArray from "fp-ts/lib/ReadonlyArray";
-import { Point } from "src/cartesian/domain";
 import { pipe } from "fp-ts/lib/function";
+import * as ReadonlyArray from "fp-ts/lib/ReadonlyArray";
+import { ReadonlyNonEmptyArray } from "fp-ts/lib/ReadonlyNonEmptyArray";
+import { Point } from "cartesian/domain";
 
 /**
  * An image is a function a two dimensional point
@@ -79,6 +79,9 @@ export const fromFrames = <T>(
   };
 };
 
+/**
+ * Create an image of the given text of unit height starting at the origin.
+ */
 export const imageFromText =
   (s: string): Image<string> =>
   (p: Point) => {
@@ -89,6 +92,9 @@ export const imageFromText =
     }
   };
 
+/**
+ * Determine the minimal bounding box for an image of the given text.
+ */
 export const textBoundingBox = (s: string) => ({
   topLeft: { x: 0, y: 0 },
   bottomRight: { x: s.length, y: 1 },
@@ -103,6 +109,19 @@ export const translate =
   (p: Point): T =>
     i({ x: p.x - amount.x, y: p.y - amount.y });
 
+/**
+ * Scale an image in the x and/or y dimensions by the given amounts.
+ */
+export const scale =
+  ({ xScale, yScale }: { xScale: number; yScale: number }) =>
+  <T>(i: Image<T>) =>
+  ({ x, y }: Point) =>
+    i({ x: x / xScale, y: y / yScale });
+
+/**
+ * Create an image by blending two images using the given pointwise blending
+ * function.
+ */
 export const overlay =
   <T>(blend: (bottom: T, top: T) => T) =>
   (bottom: Image<T>) =>

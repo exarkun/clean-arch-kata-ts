@@ -17,7 +17,7 @@ export const eqPoint = Eq.struct({
 /**
  * Denote vector addition in two dimensions.
  */
-export const addPoint = (p1: Point, p2: Point): Point => ({
+export const addPoint = (p1: Point) => (p2: Point): Point => ({
   x: p1.x + p2.x,
   y: p1.y + p2.y,
 });

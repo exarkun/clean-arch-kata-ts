@@ -69,8 +69,7 @@ export const allDirections = [
  * Compute the Point one cell in the given direction from the given Point.
  */
 export const move = (d: Direction, p: Point) =>
-  addPoint(
-    p,
+  addPoint(p)(
     match(d)
       .with(Direction.North, () => ({ x: 0, y: -1 }))
       .with(Direction.Northeast, () => ({ x: 1, y: -1 }))
@@ -142,14 +141,14 @@ export const subtractBoard =
  */
 export type StateChangeRule = (
   state: CellState,
-  allLivingNeighbors: ReadonlySet<Direction>,
+  numLivingNeighbors: number,
 ) => Option.Option<CellDifference>;
 
 /**
  * Define the standard rules of Conway's Game of Life.
  */
-export const conwayRules: StateChangeRule = (state, allLivingNeighbors) =>
-  match([state, allLivingNeighbors.size])
+export const conwayRules: StateChangeRule = (state, numLivingNeighbors) =>
+  match([state, numLivingNeighbors])
     .with([CellState.Dead, 3], () => Option.some(CellDifference.Birth))
     .with([CellState.Living, 0], () => Option.some(CellDifference.Death))
     .with([CellState.Living, 1], () => Option.some(CellDifference.Death))
@@ -167,9 +166,8 @@ export const recursiveAdvance =
     return (p: Point): CellState => {
       const neighbors = allDirections.map((d) => ({ d, p: move(d, p) }));
       const living = neighbors.filter(({ p }) => board(p) === CellState.Living);
-      const aliveInDirection = living.map(({ d }) => d);
       const state = board(p);
-      return updateCell(state, rule(state, new Set(aliveInDirection)));
+      return updateCell(state, rule(state, living.length));
     };
   };
 

@@ -1,7 +1,4 @@
 import { Command, Options } from "@effect/cli";
-import { p } from "@effect/cli/HelpDoc";
-import * as Spans from "@effect/cli/HelpDoc/Span";
-import { invalidValue } from "@effect/cli/ValidationError";
 import { Point } from "cartesian/domain";
 import { Effect, Option, pipe, Stream } from "effect";
 import { iteratedApplicative, liftIterated } from "../iterated";
@@ -24,27 +21,7 @@ import {
   makeAnimator,
   makeStatic,
 } from "./view";
-
-const withMinimum = (n: number) => (o: Options.Options<number>) =>
-  pipe(
-    o,
-    Options.map((m: number) => {
-      if (m < n) {
-        // From https://github.com/Effect-TS/effect/blob/main/packages/cli/src/internal/primitive.ts#L417
-        // it looks like Effect.orElseFail might be the right way to produce parse errors.  This way
-        // produces extremely ugly errors.
-        throw invalidValue(
-          p(
-            Spans.error(
-              `${Options.getIdentifier(o)}: ${m} is less than the minimum allowed value ${n}`,
-            ),
-          ),
-        );
-      } else {
-        return m;
-      }
-    }),
-  );
+import { withMinimum } from "@/lib/cli";
 
 const width = Options.integer("width").pipe(
   // We suppose that the aspect ratio of the terminal is 2:1 (height:width).
@@ -170,7 +147,7 @@ const lifeImpl = ({
 
   return pipe(
     renderer.setup,
-    Effect.andThen(() => boardEff),
+    Effect.andThen(boardEff),
     Effect.map(iteratedApplicative.of<Board>),
     Effect.map((b) => Stream.iterate(b, liftIterated(advance))),
     Effect.map(Stream.take(maxTurns)),
@@ -180,7 +157,6 @@ const lifeImpl = ({
         renderer.step<Error, never>,
       ),
     ),
-    Effect.andThen(undefined),
     finally_(renderer.cleanup),
   );
 };

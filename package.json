@@ -22,17 +22,14 @@
   "dependencies": {
     "@effect/cli": "^0.56.4",
     "@effect/platform-node": "^0.73.4",
-    "@types/yargs": "^17.0.33",
     "effect": "^3.13.2",
     "fp-ts": "^2.16.9",
     "knex": "^3.1.0",
-    "remeda": "^2.16.0",
     "seedrandom": "^3.0.5",
     "sqlite3": "^5.1.7",
     "ts-node": "^10.9.2",
     "ts-pattern": "^5.6.2",
-    "tsconfig-paths": "^4.2.0",
-    "yargs": "^17.7.2"
+    "tsconfig-paths": "^4.2.0"
   },
   "devDependencies": {
     "@jest/globals": "^29.7.0",

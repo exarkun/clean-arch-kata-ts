@@ -1,31 +1,26 @@
-import { Arguments, BuilderCallback, CamelCaseKey, CommandModule } from "yargs";
+import { Options } from "@effect/cli";
+import { p } from "@effect/cli/HelpDoc";
+import { error } from "@effect/cli/HelpDoc/Span";
+import { invalidValue } from "@effect/cli/ValidationError";
+import { pipe } from "effect";
 
-/**
- * A stricter version of the @types/yargs `ArgumentsCamelCase` type. The `Arguments` and
- * `ArgumentsCamelCase` types allow arbitrary fields. This type allows only those which are
- * explicitly defined.
- */
-export type StrictArguments<T = object> = {
-  [key in keyof T as key | CamelCaseKey<key>]: T[key];
-} & {
-  /** Non-option arguments */
-  _: Array<string | number>;
-  /** The script name or node command */
-  $0: string;
-};
-
-/**
- * Convenience conditional type for strictly typing a command given the type of its builder.
- */
-export type StrictCommandType<T> =
-  T extends BuilderCallback<object, infer R>
-    ? CommandModule<object, Arguments<R>> & {
-        handler: (args: StrictArguments<R>) => void | Promise<void>;
+export const withMinimum = (n: number) => (o: Options.Options<number>) =>
+  pipe(
+    o,
+    Options.map((m: number) => {
+      if (m < n) {
+        // From https://github.com/Effect-TS/effect/blob/main/packages/cli/src/internal/primitive.ts#L417
+        // it looks like Effect.orElseFail might be the right way to produce parse errors.  This way
+        // produces extremely ugly errors.
+        throw invalidValue(
+          p(
+            error(
+              `${Options.getIdentifier(o)}: ${m} is less than the minimum allowed value ${n}`,
+            ),
+          ),
+        );
+      } else {
+        return m;
       }
-    : never;
-
-/**
- * Convenience conditional type for strictly typing the `args` parameter of a handler.
- */
-export type StrictArgsType<T> =
-  T extends BuilderCallback<object, infer R> ? StrictArguments<R> : never;
+    }),
+  );

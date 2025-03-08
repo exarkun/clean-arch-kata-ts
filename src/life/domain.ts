@@ -1,8 +1,8 @@
+import { addPoint, eqPoint, Point, Region } from "@/cartesian/domain";
 import { Effect, Option } from "effect";
 import { cartesian, map, range, reduce, take, unfold } from "effect/Array";
 import { pipe } from "fp-ts/lib/function";
 import { match } from "ts-pattern";
-import { addPoint, eqPoint, Point, Region } from "@/cartesian/domain";
 import { shuffle } from "./utils";
 
 /**
@@ -33,7 +33,7 @@ export const constantBoard =
 export const birth =
   (b: Board, p: Point): Board =>
   (p2: Point) =>
-    eqPoint(p, p2) ? CellState.Living : b(p2);
+    eqPoint.equals(p, p2) ? CellState.Living : b(p2);
 
 /**
  * Define a Board with only dead cells.
@@ -109,7 +109,7 @@ export enum CellDifference {
 /**
  * Compute the state that results from applying a difference to a state.
  */
-const updateCell = (
+export const updateCell = (
   state: CellState,
   change: Option.Option<CellDifference>,
 ): CellState =>
@@ -142,7 +142,7 @@ export const subtractBoard =
  */
 export type StateChangeRule = (
   state: CellState,
-  allLivingNeighbors: Set<Direction>,
+  allLivingNeighbors: ReadonlySet<Direction>,
 ) => Option.Option<CellDifference>;
 
 /**

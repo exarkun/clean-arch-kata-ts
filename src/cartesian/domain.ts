@@ -1,4 +1,5 @@
-import { Number, Struct } from "effect";
+import * as Eq from "fp-ts/Eq";
+import * as Number from "fp-ts/number";
 
 /**
  * Denote a point in two dimensions (eg in ℕ² or ℝ²).
@@ -6,17 +7,17 @@ import { Number, Struct } from "effect";
  * TypeScript's only numeric type is 'number' so this
  * is somewhat imprecisely represented.
  */
-export type Point = { x: number; y: number };
+export type Point = Readonly<{ x: number; y: number }>;
 
-export const eqPoint = Struct.getEquivalence({
-  x: Number.Equivalence,
-  y: Number.Equivalence,
+export const eqPoint = Eq.struct({
+  x: Number.Eq,
+  y: Number.Eq,
 });
 
 /**
  * Denote vector addition in two dimensions.
  */
-export const addPoint = (p1: Point, p2: Point) => ({
+export const addPoint = (p1: Point, p2: Point): Point => ({
   x: p1.x + p2.x,
   y: p1.y + p2.y,
 });

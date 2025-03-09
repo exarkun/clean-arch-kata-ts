@@ -5,13 +5,13 @@ import { iteratedApplicative, liftIterated } from "../iterated";
 import {
   backends,
   Board,
-  conwayRules,
   emptyBoard,
   initialBoard,
   makePatternBoard,
   patterns,
   pickBackend,
   randomBoard,
+  StateChangeRule,
 } from "./domain";
 import { finally_, randomEffect } from "./utils";
 import {
@@ -21,7 +21,9 @@ import {
   makeAnimator,
   makeStatic,
 } from "./view";
-import { withMinimum } from "@/lib/cli";
+import { withMinimum, withRight } from "@/lib/cli";
+import { parse } from "@/parse";
+import { ruleParser } from "./rule";
 
 const width = Options.integer("width").pipe(
   // We suppose that the aspect ratio of the terminal is 2:1 (height:width).
@@ -95,6 +97,13 @@ const animate = Options.boolean("no-animate").pipe(
   Options.withDescription("don't animate state updates"),
   Options.map((b) => !b),
 );
+const rule = Options.text("rule").pipe(
+  Options.withDefault("B3/S23"),
+  Options.withAlias("R"),
+  Options.withDescription("specify the state evolution rule"),
+  Options.map((s) => parse(ruleParser, s)),
+  withRight,
+);
 
 const lifeOptions = {
   width,
@@ -107,6 +116,7 @@ const lifeOptions = {
   pattern,
   style,
   animate,
+  rule,
 };
 
 type LifeOptions = {
@@ -120,6 +130,7 @@ type LifeOptions = {
   pattern: Option.Option<readonly Point[]>;
   style: BorderDecorations<string>;
   animate: boolean;
+  rule: StateChangeRule;
 };
 
 const lifeImpl = ({
@@ -133,9 +144,10 @@ const lifeImpl = ({
   pattern,
   style,
   animate,
+  rule,
 }: LifeOptions): Effect.Effect<void, Error, never> => {
   const boardEff = makeBoard(width, height, cellCount, prng, pattern);
-  const advance = pickBackend(backend, width, height)(conwayRules);
+  const advance = pickBackend(backend, width, height)(rule);
 
   const border = borderImage(width, height, style);
   const renderer = (animate ? makeAnimator : makeStatic)(

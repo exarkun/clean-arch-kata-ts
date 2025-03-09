@@ -145,19 +145,6 @@ export type StateChangeRule = (
 ) => Option.Option<CellDifference>;
 
 /**
- * Define the standard rules of Conway's Game of Life.
- */
-export const conwayRules: StateChangeRule = (state, numLivingNeighbors) =>
-  match([state, numLivingNeighbors])
-    .with([CellState.Dead, 3], () => Option.some(CellDifference.Birth))
-    .with([CellState.Living, 0], () => Option.some(CellDifference.Death))
-    .with([CellState.Living, 1], () => Option.some(CellDifference.Death))
-    .with([CellState.Living, 4], () => Option.some(CellDifference.Death))
-    .with([CellState.Living, 5], () => Option.some(CellDifference.Death))
-    .with([CellState.Living, 6], () => Option.some(CellDifference.Death))
-    .otherwise(Option.none);
-
-/**
  * Define the Board recursively in terms of all earlier Boards.
  */
 export const recursiveAdvance =

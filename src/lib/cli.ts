@@ -3,6 +3,7 @@ import { p } from "@effect/cli/HelpDoc";
 import { error } from "@effect/cli/HelpDoc/Span";
 import { invalidValue } from "@effect/cli/ValidationError";
 import { pipe } from "effect";
+import * as Either from "fp-ts/Either";
 
 export const withMinimum = (n: number) => (o: Options.Options<number>) =>
   pipe(
@@ -24,3 +25,14 @@ export const withMinimum = (n: number) => (o: Options.Options<number>) =>
       }
     }),
   );
+
+/**
+ * Extract the Right result of an Either or throw an error.
+ */
+export const withRight = Options.map(<E, R>(ea: Either.Either<E, R>) => {
+  if (Either.isRight(ea)) {
+    return ea.right;
+  } else {
+    throw new Error(`${ea.left}`);
+  }
+});

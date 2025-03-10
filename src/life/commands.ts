@@ -1,11 +1,11 @@
 import { Command, Options } from "@effect/cli";
 import { Point } from "cartesian/domain";
-import { Effect, Option, pipe, Stream } from "effect";
-import { iteratedApplicative, liftIterated } from "../iterated";
+import { Console, Effect, flow, Option, Sink, Stream } from "effect";
+import { Iterated, iteratedApplicative, liftIterated } from "../iterated";
 import {
   backends,
   Board,
-  emptyBoard,
+  getBoardEq,
   initialBoard,
   makePatternBoard,
   patterns,
@@ -156,17 +156,31 @@ const lifeImpl = ({
     () => border,
     delay,
   );
+  const boardEq = getBoardEq(width, height);
 
-  return pipe(
-    renderer.setup,
-    Effect.andThen(boardEff),
+  return boardEff.pipe(
+    Effect.tap(renderer.setup),
     Effect.map(iteratedApplicative.of<Board>),
     Effect.map((b) => Stream.iterate(b, liftIterated(advance))),
-    Effect.map(Stream.take(maxTurns)),
     Effect.flatMap(
-      Stream.runFoldEffect(
-        iteratedApplicative.of(emptyBoard),
-        renderer.step<Error, never>,
+      flow(
+        Stream.zipWithPrevious,
+        Stream.flatMap(([c, n]) =>
+          Option.match(c, {
+            onNone: () => Stream.empty,
+            onSome: (value) => Stream.make({ c: value, n }),
+          }),
+        ),
+        Stream.take(maxTurns),
+        Stream.takeUntil(({ c, n }) => boardEq.equals(c.value, n.value)),
+        Stream.mapEffect(({ c, n }) => renderer.step<Error, never>(c, n)),
+        Stream.run(Sink.last()),
+        Effect.flatMap(
+          Option.match({
+            onSome: reportCompletion(maxTurns),
+            onNone: reportNoGenerations,
+          }),
+        ),
       ),
     ),
     finally_(renderer.cleanup),
@@ -177,6 +191,18 @@ export const lifeCommand = Command.make("life", lifeOptions, lifeImpl).pipe(
   Command.withDescription("Simulate the game of life"),
 );
 
+export const reportCompletion =
+  (max: number) =>
+  ({ iteration }: Iterated<Board>) =>
+    Console.log(
+      max === iteration
+        ? `Game ended after max (${iteration}) turns without settling.`
+        : `Board settled after ${iteration} turns.`,
+    );
+
+export const reportNoGenerations = () =>
+  Console.log("Completed without simulating anything.");
+
 const makeBoard = (
   width: number,
   height: number,
@@ -184,13 +210,11 @@ const makeBoard = (
   optionalPrng: Option.Option<Effect.Effect<number, never, never>>,
   optionalPattern: Option.Option<readonly Point[]>,
 ) =>
-  pipe(
-    optionalPrng,
+  optionalPrng.pipe(
     Option.match({
       onSome: (prng) => randomBoard(width, height, cellCount, prng),
       onNone: () =>
-        pipe(
-          optionalPattern,
+        optionalPattern.pipe(
           Option.match({
             onSome: (pattern) => Effect.succeed(makePatternBoard(pattern)),
             onNone: () =>

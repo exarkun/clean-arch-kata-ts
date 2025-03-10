@@ -1,9 +1,12 @@
 import { addPoint, eqPoint, Point, Region } from "@/cartesian/domain";
 import { Effect, Option } from "effect";
+import * as Eq from "fp-ts/Eq";
 import { cartesian, map, range, reduce, take, unfold } from "effect/Array";
 import { pipe } from "fp-ts/lib/function";
 import { match } from "ts-pattern";
 import { shuffle } from "./utils";
+import * as ReadonlyArray from "fp-ts/ReadonlyArray";
+import * as String from "fp-ts/string";
 
 /**
  * Denote the status of a single cell.
@@ -17,6 +20,28 @@ export enum CellState {
  * Denote the status of a rectangular grid of cells.
  */
 export type Board = (p: Point) => CellState;
+
+/**
+ * Define equality of two boards within a specific region.
+ */
+export const getBoardEq = (width: number, height: number): Eq.Eq<Board> => {
+  const xs = range(0, width - 1);
+  const ys = range(0, height - 1);
+  const coords = pipe(
+    xs,
+    ReadonlyArray.chain((x) =>
+      pipe(
+        ys,
+        ReadonlyArray.map((y) => ({ x, y })),
+      ),
+    ),
+  );
+  const getCells = (b: Board) => pipe(coords, ReadonlyArray.map(b));
+  const cellsEq = ReadonlyArray.getEq(String.Eq);
+  return {
+    equals: (a, b) => cellsEq.equals(getCells(a), getCells(b)),
+  };
+};
 
 /**
  * Define a Board with a constant value at all coordinates.

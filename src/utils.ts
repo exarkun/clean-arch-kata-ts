@@ -21,3 +21,9 @@ export const StringArrayWriter = {
   fold: ReadonlyArray.foldMap(String.Monoid)<string>(identity),
   void: void_(StringArrayWriterMonad),
 };
+
+export const uncurry =
+  <A, B, C>(f: (a: A, b: B) => C): ((a: A) => (b: B) => C) =>
+  (a) =>
+  (b) =>
+    f(a, b);

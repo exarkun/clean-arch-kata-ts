@@ -43,6 +43,25 @@ export const getBoardEq = (width: number, height: number): Eq.Eq<Board> => {
   };
 };
 
+export const boardToBigNum =
+  (width: number, height: number) =>
+  (b: Board): bigint => {
+    const xs = range(0, width - 1);
+    const ys = range(0, height - 1);
+    return pipe(
+      xs,
+      ReadonlyArray.chain((x) =>
+        pipe(
+          ys,
+          ReadonlyArray.map((y) =>
+            b({ x, y }) === CellState.Living ? "1" : "0",
+          ),
+        ),
+      ),
+      (bs) => BigInt("0b" + bs.join("")),
+    );
+  };
+
 /**
  * Define a Board with a constant value at all coordinates.
  */

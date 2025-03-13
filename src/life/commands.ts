@@ -5,7 +5,7 @@ import { Iterated, iteratedApplicative, liftIterated } from "../iterated";
 import {
   backends,
   Board,
-  getBoardEq,
+  boardToBigNum,
   initialBoard,
   makePatternBoard,
   patterns,
@@ -156,14 +156,27 @@ const lifeImpl = ({
     () => border,
     delay,
   );
-  const boardEq = getBoardEq(width, height);
 
   return boardEff.pipe(
     Effect.tap(renderer.setup),
     Effect.map(iteratedApplicative.of<Board>),
-    Effect.map((b) => Stream.iterate(b, liftIterated(advance))),
-    Effect.flatMap(
+
+    Effect.map(
       flow(
+        // Generate successive iterations of the board
+        (b) => Stream.iterate(b, liftIterated(advance)),
+
+        // Check for revisited states and end the stream when one is found.
+        Stream.mapAccum([], checkSettling(width, height)),
+        Stream.takeWhile(({ cycling }) => !cycling),
+        Stream.map(({ board }) => board),
+
+        // Stop after the specified number of iterations.
+        Stream.take(maxTurns),
+
+        // Pair up consecutive board states to facilitate animation of the
+        // transition.  We have to drop the first pairing because its
+        // "previous" doesn't exist.
         Stream.zipWithPrevious,
         Stream.flatMap(([c, n]) =>
           Option.match(c, {
@@ -171,16 +184,22 @@ const lifeImpl = ({
             onSome: (value) => Stream.make({ c: value, n }),
           }),
         ),
-        Stream.take(maxTurns),
-        Stream.takeUntil(({ c, n }) => boardEq.equals(c.value, n.value)),
+
+        // Render the animation.
         Stream.mapEffect(({ c, n }) => renderer.step<Error, never>(c, n)),
+
+        // Consume the whole stream, keeping just the final value.
         Stream.run(Sink.last()),
-        Effect.flatMap(
-          Option.match({
-            onSome: reportCompletion(maxTurns),
-            onNone: reportNoGenerations,
-          }),
-        ),
+      ),
+    ),
+
+    // Report the outcome
+    Effect.flatMap(
+      Effect.flatMap(
+        Option.match({
+          onSome: reportCompletion(maxTurns),
+          onNone: reportNoGenerations,
+        }),
       ),
     ),
     finally_(renderer.cleanup),
@@ -190,6 +209,23 @@ const lifeImpl = ({
 export const lifeCommand = Command.make("life", lifeOptions, lifeImpl).pipe(
   Command.withDescription("Simulate the game of life"),
 );
+
+export const checkSettling =
+  (width: number, height: number) =>
+  (
+    recent: readonly bigint[],
+    b: Iterated<Board>,
+  ): [readonly bigint[], { cycling: boolean; board: Iterated<Board> }] => {
+    const n = boardToBigNum(width, height)(b.value);
+    const idx = recent.indexOf(n);
+    if (idx === -1) {
+      // Not seen recently
+      return [[n, ...recent].slice(0, 100), { cycling: false, board: b }];
+    } else {
+      // A cycle has been detected
+      return [recent, { cycling: true, board: b }];
+    }
+  };
 
 export const reportCompletion =
   (max: number) =>

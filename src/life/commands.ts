@@ -1,5 +1,4 @@
 import { Command, Options } from "@effect/cli";
-import { Point } from "cartesian/domain";
 import { Console, Effect, flow, Option, Sink, Stream } from "effect";
 import { Iterated, iteratedApplicative, liftIterated } from "../iterated";
 import {
@@ -7,7 +6,6 @@ import {
   Board,
   boardToBigNum,
   initialBoard,
-  makePatternBoard,
   patterns,
   pickBackend,
   randomBoard,
@@ -82,6 +80,7 @@ const pattern = Options.choiceWithValue(
   Options.optional,
   Options.withAlias("p"),
   Options.withDescription("name of a well-known pattern to start with"),
+  Options.map(Option.map(Effect.succeed)),
 );
 const style = Options.choiceWithValue(
   "style",
@@ -127,7 +126,7 @@ type LifeOptions = {
   delay: number;
   backend: string;
   prng: Option.Option<Effect.Effect<number, never, never>>;
-  pattern: Option.Option<readonly Point[]>;
+  pattern: Option.Option<Effect.Effect<Board>>;
   style: BorderDecorations<string>;
   animate: boolean;
   rule: StateChangeRule;
@@ -146,7 +145,16 @@ const lifeImpl = ({
   animate,
   rule,
 }: LifeOptions): Effect.Effect<void, Error, never> => {
-  const boardEff = makeBoard(width, height, cellCount, prng, pattern);
+  const boardEff = pattern.pipe(
+    Option.orElse(() =>
+      prng.pipe(
+        Option.map((prng) => randomBoard(width, height, cellCount, prng)),
+      ),
+    ),
+    Option.getOrElse(() =>
+      Effect.succeed(initialBoard(width, height, cellCount)),
+    ),
+  );
   const advance = pickBackend(backend, width, height)(rule);
 
   const border = borderImage(width, height, style);
@@ -238,24 +246,3 @@ export const reportCompletion =
 
 export const reportNoGenerations = () =>
   Console.log("Completed without simulating anything.");
-
-const makeBoard = (
-  width: number,
-  height: number,
-  cellCount: number,
-  optionalPrng: Option.Option<Effect.Effect<number, never, never>>,
-  optionalPattern: Option.Option<readonly Point[]>,
-) =>
-  optionalPrng.pipe(
-    Option.match({
-      onSome: (prng) => randomBoard(width, height, cellCount, prng),
-      onNone: () =>
-        optionalPattern.pipe(
-          Option.match({
-            onSome: (pattern) => Effect.succeed(makePatternBoard(pattern)),
-            onNone: () =>
-              Effect.sync(() => initialBoard(width, height, cellCount)),
-          }),
-        ),
-    }),
-  );

@@ -1,5 +1,5 @@
 import { addPoint, eqPoint, Point, Region } from "@/cartesian/domain";
-import { Effect, Option } from "effect";
+import { Effect, flow, Option } from "effect";
 import * as Eq from "fp-ts/Eq";
 import { cartesian, map, range, reduce, take, unfold } from "effect/Array";
 import { pipe } from "fp-ts/lib/function";
@@ -225,29 +225,6 @@ export const backends = {
 };
 
 /**
- * Define the living cells that make up a few well-known patterns.
- */
-export const patterns = {
-  glider: [
-    { x: 0, y: 1 },
-    { x: 1, y: 2 },
-    { x: 2, y: 0 },
-    { x: 2, y: 1 },
-    { x: 2, y: 2 },
-  ],
-  blinker: [
-    { x: 0, y: 1 },
-    { x: 1, y: 1 },
-    { x: 2, y: 1 },
-  ],
-  preblock: [
-    { x: 0, y: 0 },
-    { x: 0, y: 1 },
-    { x: 1, y: 0 },
-  ],
-};
-
-/**
  * Define the simple initial board state.
  */
 export const initialBoard = (
@@ -292,11 +269,6 @@ export const randomBoard = (
   );
 };
 
-export const makePatternBoard: (points: readonly Point[]) => Board = reduce(
-  emptyBoard,
-  birth,
-);
-
 export const pickBackend = (name: string, width: number, height: number) =>
   match(name)
     .with("function", () => recursiveAdvance)
@@ -304,3 +276,51 @@ export const pickBackend = (name: string, width: number, height: number) =>
     .otherwise(() => {
       throw new Error("zoops");
     });
+
+export const boardFromPoints: (points: readonly Point[]) => Board = reduce(
+  emptyBoard,
+  birth,
+);
+
+export const boardFromFunction =
+  (f: (x: number) => number): Board =>
+  ({ x, y }) =>
+    Math.floor(f(Math.floor(x))) === Math.floor(y)
+      ? CellState.Living
+      : CellState.Dead;
+
+/**
+ * Define the living cells that make up a few well-known patterns.
+ */
+export const patterns = {
+  glider: boardFromPoints([
+    { x: 0, y: 1 },
+    { x: 1, y: 2 },
+    { x: 2, y: 0 },
+    { x: 2, y: 1 },
+    { x: 2, y: 2 },
+  ]),
+  blinker: boardFromPoints([
+    { x: 0, y: 1 },
+    { x: 1, y: 1 },
+    { x: 2, y: 1 },
+  ]),
+  preblock: boardFromPoints([
+    { x: 0, y: 0 },
+    { x: 0, y: 1 },
+    { x: 1, y: 0 },
+  ]),
+  sine: boardFromFunction(
+    flow(
+      (x: number) => x / 20,
+      Math.sin,
+      (y: number) => y * 10 + 20,
+    ),
+  ),
+  parabola: boardFromFunction(
+    flow(
+      (x: number) => x - 20,
+      (x: number) => (x * x) / 20,
+    ),
+  ),
+};

@@ -1,4 +1,4 @@
-import { addPoint, eqPoint, Point, Region } from "@/cartesian/domain";
+import { addPoint, eqPoint, Point, Region, ring } from "@/cartesian/domain";
 import { Effect, flow, Option } from "effect";
 import * as Eq from "fp-ts/Eq";
 import { cartesian, map, range, reduce, take, unfold } from "effect/Array";
@@ -323,4 +323,8 @@ export const patterns = {
       (x: number) => (x * x) / 20,
     ),
   ),
+  ring: (p: Point) =>
+    ring(15, 16)(addPoint({ x: -15, y: -15 })(p))
+      ? CellState.Living
+      : CellState.Dead,
 };

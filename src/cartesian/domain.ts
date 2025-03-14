@@ -17,10 +17,12 @@ export const eqPoint = Eq.struct({
 /**
  * Denote vector addition in two dimensions.
  */
-export const addPoint = (p1: Point) => (p2: Point): Point => ({
-  x: p1.x + p2.x,
-  y: p1.y + p2.y,
-});
+export const addPoint =
+  (p1: Point) =>
+  (p2: Point): Point => ({
+    x: p1.x + p2.x,
+    y: p1.y + p2.y,
+  });
 
 /**
  * Denote a subset of a two dimensional space.
@@ -42,4 +44,20 @@ export const rectangle = (width: number, height: number): Region => {
   return ({ x, y }: Point) => {
     return x >= 0 && x < width && y >= 0 && y < height;
   };
+};
+
+/**
+ * The interior of a circle.
+ */
+export const circle = (radius: number): Region => {
+  return ({ x, y }: Point) => Math.sqrt(x * x + y * y) <= radius;
+};
+
+/**
+ * The space between two concentric circles of given radii.
+ */
+export const ring = (innerRadius: number, outerRadius: number): Region => {
+  const inner = circle(innerRadius);
+  const outer = circle(outerRadius);
+  return (p: Point) => outer(p) && !inner(p);
 };

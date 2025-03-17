@@ -1,14 +1,14 @@
 import { Point } from "@/cartesian/domain";
-import { compose } from "effect/Function";
 import * as ReadonlyArray from "fp-ts/ReadonlyArray";
 import * as Store from "fp-ts/Store";
 import {
-    allDirections,
-    CellState,
-    move,
-    StateChangeRule,
-    updateCell,
+  allDirections,
+  CellState,
+  move,
+  StateChangeRule,
+  updateCell,
 } from "../domain";
+import { flow } from "fp-ts/lib/function";
 
 // export const URI = "Board";
 
@@ -40,7 +40,7 @@ const getNeighbors = (() => {
   const experiment = Store.experiment(ReadonlyArray.Functor)(getNeighbors);
   const onlyLiving = ReadonlyArray.filter((s) => s === CellState.Living);
   const length = <A>(a: readonly A[]) => a.length;
-  return compose(compose(experiment<CellState>, onlyLiving), length);
+  return flow(experiment<CellState>, onlyLiving, length);
 })();
 
 export const applyRule =
@@ -50,5 +50,4 @@ export const applyRule =
     return updateCell(state, rule(state, getNeighbors(s)));
   };
 
-export const advanceStore = (rule: StateChangeRule) =>
-  Store.extend(applyRule(rule));
+export const advanceStore = flow(applyRule, Store.extend);

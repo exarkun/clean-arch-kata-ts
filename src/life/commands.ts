@@ -1,5 +1,8 @@
+import { withMinimum, withRight } from "@/lib/cli";
+import { parse } from "@/parse";
 import { Command, Options } from "@effect/cli";
 import { Console, Effect, flow, Option, Sink, Stream } from "effect";
+import { pipe } from "fp-ts/lib/function";
 import { Iterated, iteratedApplicative, liftIterated } from "../iterated";
 import {
   backends,
@@ -9,8 +12,8 @@ import {
   patterns,
   pickBackend,
   randomBoard,
-  StateChangeRule,
 } from "./domain";
+import { ruleParser } from "./rule";
 import { finally_, randomEffect } from "./utils";
 import {
   BorderDecorations,
@@ -19,9 +22,6 @@ import {
   makeAnimator,
   makeStatic,
 } from "./view";
-import { withMinimum, withRight } from "@/lib/cli";
-import { parse } from "@/parse";
-import { ruleParser } from "./rule";
 
 const width = Options.integer("width").pipe(
   // We suppose that the aspect ratio of the terminal is 2:1 (height:width).
@@ -36,20 +36,105 @@ const height = Options.integer("height").pipe(
   Options.withAlias("h"),
   Options.withDescription("the size of the board on the y axis"),
 );
+const prng = Options.text("seed").pipe(
+  Options.withAlias("s"),
+  Options.withDescription(
+    "for a randomly initialised board, a value to use to seed the PRNG",
+  ),
+  Options.map(randomEffect),
+  Options.optional,
+);
+const cellCount = Options.integer("cell-count").pipe(
+  withMinimum(0),
+  Options.withAlias("c"),
+  Options.withDescription(
+    "the number of cells which will be alive in the initial game state",
+  ),
+);
+const pattern = Options.choiceWithValue(
+  "pattern",
+  Object.entries(patterns),
+).pipe(
+  Options.withAlias("p"),
+  Options.withDescription("name of a well-known pattern to start with"),
+);
+
+type SizedBoard = {
+  width: number;
+  height: number;
+  board: Effect.Effect<Board, never, never>;
+};
+
+const patternBoardOption: Options.Options<SizedBoard> = Options.all({
+  width,
+  height,
+  pattern,
+}).pipe(
+  Options.map(
+    ({ width, height, pattern }): SizedBoard => ({
+      width,
+      height,
+      board: Effect.succeed(pattern),
+    }),
+  ),
+);
+
+const randomBoardOption: Options.Options<SizedBoard> = Options.all({
+  width,
+  height,
+  cellCount,
+  optionalPrng: prng,
+}).pipe(
+  Options.map(({ width, height, optionalPrng, cellCount }) => ({
+    width,
+    height,
+    board: pipe(
+      optionalPrng,
+      Option.map((prng) => randomBoard(width, height, cellCount, prng)),
+      Option.getOrElse(() =>
+        Effect.succeed(initialBoard(width, height, cellCount)),
+      ),
+    ),
+  })),
+);
+
+const backend = Options.choice("backend", Object.keys(backends)).pipe(
+  Options.withDefault("array"),
+  Options.withAlias("b"),
+  Options.withDescription("the game state strategy to use"),
+);
+const rule = Options.text("rule").pipe(
+  Options.withDefault("B3/S23"),
+  Options.withAlias("R"),
+  Options.withDescription("specify the state evolution rule"),
+  Options.map((s) => parse(ruleParser, s)),
+  withRight,
+);
+
+const board: Options.Options<SizedBoard> = Options.orElse(
+  randomBoardOption,
+  patternBoardOption,
+);
+
+const boardInfo = Options.all({
+  board,
+  backend,
+  rule,
+}).pipe(
+  Options.map(({ board: { board, width, height }, backend, rule }) => ({
+    width,
+    height,
+    board,
+    advance: pickBackend(backend, width, height)(rule),
+  })),
+);
+
 const maxTurns = Options.integer("max-turns").pipe(
   Options.withDefault(20),
   withMinimum(0),
   Options.withAlias("m"),
   Options.withDescription(
     "the maximum number of generations for which to run the game",
-  ),
-);
-const cellCount = Options.integer("cell-count").pipe(
-  Options.withDefault(15),
-  withMinimum(0),
-  Options.withAlias("c"),
-  Options.withDescription(
-    "the number of cells which will be alive in the initial game state",
   ),
 );
 const delay = Options.integer("iteration-delay").pipe(
@@ -59,28 +144,6 @@ const delay = Options.integer("iteration-delay").pipe(
   Options.withDescription(
     "the number of milliseconds to wait between generations",
   ),
-);
-const prng = Options.text("seed").pipe(
-  Options.optional,
-  Options.withAlias("s"),
-  Options.withDescription(
-    "for a randomly initialised board, a value to use to seed the PRNG",
-  ),
-  Options.map(Option.map(randomEffect)),
-);
-const backend = Options.choice("backend", Object.keys(backends)).pipe(
-  Options.withDefault("array"),
-  Options.withAlias("b"),
-  Options.withDescription("the game state strategy to use"),
-);
-const pattern = Options.choiceWithValue(
-  "pattern",
-  Object.entries(patterns),
-).pipe(
-  Options.optional,
-  Options.withAlias("p"),
-  Options.withDescription("name of a well-known pattern to start with"),
-  Options.map(Option.map(Effect.succeed)),
 );
 const style = Options.choiceWithValue(
   "style",
@@ -96,67 +159,37 @@ const animate = Options.boolean("no-animate").pipe(
   Options.withDescription("don't animate state updates"),
   Options.map((b) => !b),
 );
-const rule = Options.text("rule").pipe(
-  Options.withDefault("B3/S23"),
-  Options.withAlias("R"),
-  Options.withDescription("specify the state evolution rule"),
-  Options.map((s) => parse(ruleParser, s)),
-  withRight,
-);
 
 const lifeOptions = {
-  width,
-  height,
+  boardInfo,
   maxTurns,
-  cellCount,
   delay,
-  prng,
   backend,
-  pattern,
   style,
   animate,
   rule,
 };
 
 type LifeOptions = {
-  width: number;
-  height: number;
+  boardInfo: {
+    width: number;
+    height: number;
+    board: Effect.Effect<Board, never, never>;
+    advance: (_: Board) => Board;
+  };
   maxTurns: number;
-  cellCount: number;
   delay: number;
-  backend: string;
-  prng: Option.Option<Effect.Effect<number, never, never>>;
-  pattern: Option.Option<Effect.Effect<Board>>;
   style: BorderDecorations<string>;
   animate: boolean;
-  rule: StateChangeRule;
 };
 
 const lifeImpl = ({
-  width,
-  height,
+  boardInfo: { width, height, board, advance },
   maxTurns,
-  cellCount,
   delay,
-  backend,
-  prng,
-  pattern,
   style,
   animate,
-  rule,
 }: LifeOptions): Effect.Effect<void, Error, never> => {
-  const boardEff = pattern.pipe(
-    Option.orElse(() =>
-      prng.pipe(
-        Option.map((prng) => randomBoard(width, height, cellCount, prng)),
-      ),
-    ),
-    Option.getOrElse(() =>
-      Effect.succeed(initialBoard(width, height, cellCount)),
-    ),
-  );
-  const advance = pickBackend(backend, width, height)(rule);
-
   const border = borderImage(width, height, style);
   const renderer = (animate ? makeAnimator : makeStatic)(
     width,
@@ -165,7 +198,7 @@ const lifeImpl = ({
     delay,
   );
 
-  return boardEff.pipe(
+  return board.pipe(
     Effect.tap(renderer.setup),
     Effect.map(iteratedApplicative.of<Board>),
 

@@ -292,7 +292,7 @@ export const boardFromFunction =
 /**
  * Define the living cells that make up a few well-known patterns.
  */
-export const patterns = {
+export const patterns: Record<string, Board> = {
   glider: boardFromPoints([
     { x: 0, y: 1 },
     { x: 1, y: 2 },

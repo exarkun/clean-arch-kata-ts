@@ -1,12 +1,12 @@
 import { addPoint, eqPoint, Point, Region, ring } from "@/cartesian/domain";
 import { Effect, flow, Option } from "effect";
-import * as Eq from "fp-ts/Eq";
 import { cartesian, map, range, reduce, take, unfold } from "effect/Array";
+import * as Eq from "fp-ts/Eq";
 import { pipe } from "fp-ts/lib/function";
-import { match } from "ts-pattern";
-import { shuffle } from "./utils";
 import * as ReadonlyArray from "fp-ts/ReadonlyArray";
 import * as String from "fp-ts/string";
+import { match } from "ts-pattern";
+import { shuffle } from "./utils";
 
 /**
  * Denote the status of a single cell.
@@ -301,9 +301,9 @@ export const patterns: Record<string, Board> = {
     { x: 2, y: 2 },
   ]),
   blinker: boardFromPoints([
-    { x: 0, y: 1 },
-    { x: 1, y: 1 },
-    { x: 2, y: 1 },
+    { x: 2, y: 3 },
+    { x: 3, y: 3 },
+    { x: 4, y: 3 },
   ]),
   preblock: boardFromPoints([
     { x: 0, y: 0 },

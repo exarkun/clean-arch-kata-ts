@@ -1,9 +1,9 @@
 import {
-  fromFrames,
-  Image,
-  imageFromText,
-  overlay,
-  translate,
+    fromFrames,
+    Image,
+    imageFromText,
+    overlay,
+    translate,
 } from "@/animation/domain";
 import { ANSITerminal, present } from "@/animation/view";
 import { Point } from "@/cartesian/domain";
@@ -67,7 +67,7 @@ export type Animator<A> = {
   step: <E, C>(
     prev: Iterated<A>,
     next: Iterated<A>,
-  ) => Effect.Effect<Iterated<A>, E, C>;
+  ) => Effect.Effect<void, E, C>;
   cleanup: Effect.Effect<void, Error, never>;
 };
 

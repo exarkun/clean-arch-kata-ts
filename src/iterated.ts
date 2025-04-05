@@ -36,10 +36,12 @@ export const iteratedApplicative: Applicative1<URI> = {
   of: (a) => ({ iteration: 0, value: a }),
 };
 
+export const Applicative = iteratedApplicative;
+
 /**
  * Lift a function to `Iterated`.
  */
-export const liftIterated =
+export const map =
   <A, B>(f: (a: A) => B): ((a: Iterated<A>) => Iterated<B>) =>
   ({ iteration, value }: Iterated<A>) => ({
     iteration: iteration + 1,

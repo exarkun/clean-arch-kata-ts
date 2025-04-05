@@ -3,24 +3,24 @@ import { parse } from "@/parse";
 import { Command, Options } from "@effect/cli";
 import { Console, Effect, flow, Option, Sink, Stream } from "effect";
 import { pipe } from "fp-ts/lib/function";
-import { Iterated, iteratedApplicative, liftIterated } from "../iterated";
+import * as Iterated from "../iterated";
 import {
-  backends,
-  Board,
-  boardToBigNum,
-  initialBoard,
-  patterns,
-  pickBackend,
-  randomBoard,
+    backends,
+    Board,
+    initialBoard,
+    patterns,
+    pickBackend,
+    randomBoard,
 } from "./domain";
 import { ruleParser } from "./rule";
+import * as Simulation from "./simulation";
 import { finally_, randomEffect } from "./utils";
 import {
-  BorderDecorations,
-  borderImage,
-  decorations,
-  makeAnimator,
-  makeStatic,
+    BorderDecorations,
+    borderImage,
+    decorations,
+    makeAnimator,
+    makeStatic,
 } from "./view";
 
 const width = Options.integer("width").pipe(
@@ -200,20 +200,15 @@ const lifeImpl = ({
 
   return board.pipe(
     Effect.tap(renderer.setup),
-    Effect.map(iteratedApplicative.of<Board>),
 
     Effect.map(
       flow(
-        // Generate successive iterations of the board
-        (b) => Stream.iterate(b, liftIterated(advance)),
-
-        // Check for revisited states and end the stream when one is found.
-        Stream.mapAccum([], checkSettling(width, height)),
-        Stream.takeWhile(({ cycling }) => !cycling),
-        Stream.map(({ board }) => board),
-
-        // Stop after the specified number of iterations.
-        Stream.take(maxTurns),
+        // Lift the initial board state into an iterated simulation.
+        Iterated.Applicative.of<Board>,
+        Simulation.incomplete,
+        
+        // Iterate the simulation to generate successive board states.
+        (b) => Stream.iterate(b, Simulation.map(Iterated.map(advance))),
 
         // Pair up consecutive board states to facilitate animation of the
         // transition.  We have to drop the first pairing because its
@@ -227,21 +222,30 @@ const lifeImpl = ({
         ),
 
         // Render the animation.
-        Stream.mapEffect(({ c, n }) => renderer.step<Error, never>(c, n)),
+        Stream.tap(({ c, n }) => renderer.step<Error, never>(c.value, n.value)),
 
-        // Consume the whole stream, keeping just the final value.
-        Stream.run(Sink.last()),
+        // Unpair now that rendering is done, keeping just the newest board state
+        Stream.map(({ n }) => n),
+
+        // Check to see if the simulation satisfies any of the completion
+        // conditions.
+        Simulation.checkCompletion(maxTurns, width, height),
+
+        // Check for completion and discard incomplete states.
+        Stream.filter(Simulation.isComplete),
       ),
     ),
 
-    // Report the outcome
+    // Only complete simulations will come out of the stream.  Take the first
+    // one as our result.
+    Effect.flatMap(Stream.run(Sink.head())),
+    
+    // And report the outcome.
     Effect.flatMap(
-      Effect.flatMap(
-        Option.match({
-          onSome: reportCompletion(maxTurns),
-          onNone: reportNoGenerations,
-        }),
-      ),
+      Option.match({
+        onSome: (x) => Simulation.reportCompletion(x),
+        onNone: reportNoGenerations,
+      }),
     ),
     finally_(renderer.cleanup),
   );
@@ -250,32 +254,6 @@ const lifeImpl = ({
 export const lifeCommand = Command.make("life", lifeOptions, lifeImpl).pipe(
   Command.withDescription("Simulate the game of life"),
 );
-
-export const checkSettling =
-  (width: number, height: number) =>
-  (
-    recent: readonly bigint[],
-    b: Iterated<Board>,
-  ): [readonly bigint[], { cycling: boolean; board: Iterated<Board> }] => {
-    const n = boardToBigNum(width, height)(b.value);
-    const idx = recent.indexOf(n);
-    if (idx === -1) {
-      // Not seen recently
-      return [[n, ...recent].slice(0, 100), { cycling: false, board: b }];
-    } else {
-      // A cycle has been detected
-      return [recent, { cycling: true, board: b }];
-    }
-  };
-
-export const reportCompletion =
-  (max: number) =>
-  ({ iteration }: Iterated<Board>) =>
-    Console.log(
-      max === iteration
-        ? `Game ended after max (${iteration}) turns without settling.`
-        : `Board settled after ${iteration} turns.`,
-    );
 
 export const reportNoGenerations = () =>
   Console.log("Completed without simulating anything.");

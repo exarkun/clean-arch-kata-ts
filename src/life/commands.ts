@@ -12,10 +12,12 @@ import {
     pickBackend,
     randomBoard,
 } from "./domain";
+import { manuallySpecifiedBoard } from "./editor";
 import { ruleParser } from "./rule";
 import * as Simulation from "./simulation";
 import { finally_, randomEffect } from "./utils";
 import {
+    Animator,
     BorderDecorations,
     borderImage,
     decorations,
@@ -50,6 +52,7 @@ const cellCount = Options.integer("cell-count").pipe(
   Options.withDescription(
     "the number of cells which will be alive in the initial game state",
   ),
+  Options.optional,
 );
 const pattern = Options.choiceWithValue(
   "pattern",
@@ -59,44 +62,70 @@ const pattern = Options.choiceWithValue(
   Options.withDescription("name of a well-known pattern to start with"),
 );
 
-type SizedBoard = {
+type BoardSetup = {
   width: number;
   height: number;
-  board: Effect.Effect<Board, never, never>;
+  makeBoard: (_: Animator<Board>) => Effect.Effect<Board, never, never>;
 };
 
-const patternBoardOption: Options.Options<SizedBoard> = Options.all({
+const patternBoardOption: Options.Options<BoardSetup> = Options.all({
   width,
   height,
   pattern,
 }).pipe(
   Options.map(
-    ({ width, height, pattern }): SizedBoard => ({
+    ({ width, height, pattern }): BoardSetup => ({
       width,
       height,
-      board: Effect.succeed(pattern),
+      makeBoard: (_: Animator<Board>) => Effect.succeed(pattern),
     }),
   ),
 );
 
-const randomBoardOption: Options.Options<SizedBoard> = Options.all({
+const randomBoardOption: Options.Options<BoardSetup> = Options.all({
   width,
   height,
-  cellCount,
+  optionalCellCount: cellCount,
   optionalPrng: prng,
 }).pipe(
-  Options.map(({ width, height, optionalPrng, cellCount }) => ({
-    width,
-    height,
-    board: pipe(
+  Options.map(({ width, height, optionalPrng, optionalCellCount }) =>
+    pipe(
+      optionalRandomBoard(width, height)(optionalPrng)(optionalCellCount),
+      Option.orElse(() =>
+        optionalInitialBoard(width, height)(optionalCellCount),
+      ),
+      Option.getOrElse(() => ({ width, height, makeBoard: (renderer: Animator<Board>) => manuallySpecifiedBoard(width, height, renderer) })),
+    ),
+  ),
+);
+
+const optionalRandomBoard =
+  (width: number, height: number) =>
+  (optionalPrng: Option.Option<Effect.Effect<number, never, never>>) =>
+    (optionalCellCount: Option.Option<number>): Option.Option<BoardSetup> =>
+    pipe(
       optionalPrng,
-      Option.map((prng) => randomBoard(width, height, cellCount, prng)),
-      Option.getOrElse(() =>
+      Option.flatMap((prng) =>
+        pipe(
+          optionalCellCount,
+          Option.map((cellCount) =>
+            randomBoard(width, height, cellCount, prng),
+          ),
+        ),
+      ),
+      Option.map((board) => ({ width, height, makeBoard: (_: Animator<Board>) => board })),
+    );
+
+const optionalInitialBoard =
+  (width: number, height: number) =>
+    (optionalCellCount: Option.Option<number>): Option.Option<BoardSetup> =>
+    pipe(
+      optionalCellCount,
+      Option.map((cellCount) =>
         Effect.succeed(initialBoard(width, height, cellCount)),
       ),
-    ),
-  })),
-);
+      Option.map((board) => ({ width, height, makeBoard: (_: Animator<Board>) => board })),
+    );
 
 const backend = Options.choice("backend", Object.keys(backends)).pipe(
   Options.withDefault("array"),
@@ -111,20 +140,20 @@ const rule = Options.text("rule").pipe(
   withRight,
 );
 
-const board: Options.Options<SizedBoard> = Options.orElse(
+const boardSetup: Options.Options<BoardSetup> = Options.orElse(
   randomBoardOption,
   patternBoardOption,
 );
 
 const boardInfo = Options.all({
-  board,
+  boardSetup,
   backend,
   rule,
 }).pipe(
-  Options.map(({ board: { board, width, height }, backend, rule }) => ({
+  Options.map(({ boardSetup: { makeBoard, width, height }, backend, rule }) => ({
     width,
     height,
-    board,
+    makeBoard,
     advance: pickBackend(backend, width, height)(rule),
   })),
 );
@@ -174,7 +203,7 @@ type LifeOptions = {
   boardInfo: {
     width: number;
     height: number;
-    board: Effect.Effect<Board, never, never>;
+    makeBoard: (_: Animator<Board>) => Effect.Effect<Board, never, never>;
     advance: (_: Board) => Board;
   };
   maxTurns: number;
@@ -184,7 +213,7 @@ type LifeOptions = {
 };
 
 const lifeImpl = ({
-  boardInfo: { width, height, board, advance },
+  boardInfo: { width, height, makeBoard, advance },
   maxTurns,
   delay,
   style,
@@ -198,7 +227,10 @@ const lifeImpl = ({
     delay,
   );
 
-  return board.pipe(
+  return pipe(
+    renderer,
+    makeBoard,
+  
     Effect.tap(renderer.setup),
 
     Effect.map(
@@ -206,7 +238,7 @@ const lifeImpl = ({
         // Lift the initial board state into an iterated simulation.
         Iterated.Applicative.of<Board>,
         Simulation.incomplete,
-        
+
         // Iterate the simulation to generate successive board states.
         (b) => Stream.iterate(b, Simulation.map(Iterated.map(advance))),
 
@@ -239,7 +271,7 @@ const lifeImpl = ({
     // Only complete simulations will come out of the stream.  Take the first
     // one as our result.
     Effect.flatMap(Stream.run(Sink.head())),
-    
+
     // And report the outcome.
     Effect.flatMap(
       Option.match({

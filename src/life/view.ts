@@ -63,12 +63,12 @@ const rectangle = ({
  * Denote an Effect which presents the given board state.
  */
 export type Animator<A> = {
-  setup: Effect.Effect<void, Error, never>;
+  setup: Effect.Effect<void, never, never>;
   step: <E, C>(
     prev: Iterated<A>,
     next: Iterated<A>,
   ) => Effect.Effect<void, E, C>;
-  cleanup: Effect.Effect<void, Error, never>;
+  cleanup: Effect.Effect<void, never, never>;
 };
 
 export const managedTerminal = <T>(a: Animator<T>): Animator<T> => ({

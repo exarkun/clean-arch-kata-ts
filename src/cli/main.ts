@@ -2,8 +2,8 @@ import { Command } from "@effect/cli";
 import { NodeContext, NodeRuntime } from "@effect/platform-node";
 import { Effect } from "effect";
 import { greetCommand } from "greet/commands";
+import { lifeCommand } from "life";
 import { rollCommand } from "roll/commands";
-import { lifeCommand } from "life/commands";
 
 const program = Command.make("cli").pipe(
   Command.withSubcommands([lifeCommand, greetCommand, rollCommand]),
